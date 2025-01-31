@@ -1,4 +1,6 @@
 import nltk
+nltk.download('punkt_tab')
+
 import asyncio
 import os
 import re
