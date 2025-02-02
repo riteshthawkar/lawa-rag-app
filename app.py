@@ -10,12 +10,12 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError, constr
-from typing import List, Optional
+from typing import List
 from pinecone import Pinecone
 from pinecone_text.sparse import BM25Encoder
 from langchain_community.retrievers import PineconeHybridSearchRetriever
 from langchain_huggingface import HuggingFaceEmbeddings
-from openai import OpenAI, AsyncOpenAI
+from openai import AsyncOpenAI
 import logging
 
 # Ensure the required NLTK data is downloaded
@@ -290,7 +290,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     complete_answer += delta_content
                     cleaned_content = re.sub(r'\[\d+\]', '', delta_content)
                     chunk_buffer += cleaned_content
-                    if len(chunk_buffer) >= 20:
+                    if len(chunk_buffer) >= 1:
                         await websocket.send_json({"response": chunk_buffer})
                         chunk_buffer = ""
 
