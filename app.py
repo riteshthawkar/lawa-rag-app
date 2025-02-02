@@ -226,10 +226,10 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await asyncio.wait_for(websocket.receive_json(), timeout=30)
             chat_request = ChatRequest(**data)
         except ValidationError as e:
-            await safe_send(websocket, {"response": f"Validation error: {e}"})
+            await safe_send(websocket, {"response": "Something went wrong!", "sources": []})
             return
         except Exception as e:
-            await safe_send(websocket, {"response": "Invalid JSON format"})
+            await safe_send(websocket, {"response": "Something went wrong!", "sources": []})
             return
 
         question = chat_request.question
@@ -240,7 +240,7 @@ async def websocket_endpoint(websocket: WebSocket):
             retrieved_docs = await asyncio.to_thread(retriever.invoke, question)
         except Exception as e:
             logger.error(f"Document retrieval error: {e}")
-            await safe_send(websocket, {"response": "Document retrieval failed"})
+            await safe_send(websocket, {"response": "Document retrieval failed", "sources": []})
             return
 
         docs = [{
@@ -250,7 +250,7 @@ async def websocket_endpoint(websocket: WebSocket):
         } for ele in retrieved_docs]
 
         if not docs:
-            await safe_send(websocket, {"response": "Cannot provide answer to this question"})
+            await safe_send(websocket, {"response": "Cannot provide answer to this question", "sources": []})
             return
 
         # Rerank the documents (fallback to original docs if reranking fails)
