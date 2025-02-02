@@ -293,7 +293,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     if len(chunk_buffer) >= 20:
                         await websocket.send_json({"response": chunk_buffer})
                         chunk_buffer = ""
-                        
+
             # Send any remaining content in the buffer
             if chunk_buffer:
                 await websocket.send_json({"response": chunk_buffer})
@@ -355,3 +355,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await safe_send(websocket, {"response": "Something went wrong! Please try again."})
     finally:
         stop_event.set()
+
+@app.get("/")
+async def root():
+    return {"message": "working"}
