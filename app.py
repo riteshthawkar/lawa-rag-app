@@ -64,8 +64,8 @@ app.add_middleware(
 # Initialize external services with retries
 try:
     openai_client = AsyncOpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        # base_url="https://api.perplexity.ai"
+        api_key=os.getenv("PERPLEXITY_API_KEY"),
+        base_url="https://api.perplexity.ai"
     )
     pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
     embed_model = HuggingFaceEmbeddings(
@@ -271,13 +271,13 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Prepare messages with history truncation
         messages = [{"role": "system", "content": system_prompt}]
-        messages += [msg for msg in chat_request.previous_chats[:-1]]
+        messages += [msg for msg in chat_request.previous_chats]
         messages.append({"role": "user", "content": format_query(question, language, ranked_docs)})
 
         
         try:
             completion = await openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="sonar",
                 messages=messages,
                 temperature=0.8,
                 max_completion_tokens=1024,
@@ -301,7 +301,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         except Exception as e:
             logger.error(f"Streaming error: {e}")
-            await safe_send(websocket, {"response": "Response generation failed"})
+            await safe_send(websocket, {"response": "Response generation failed", "sources": []})
             return
 
         citations = []
@@ -352,7 +352,7 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("Client disconnected")
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
-        await safe_send(websocket, {"response": "Something went wrong! Please try again."})
+        await safe_send(websocket, {"response": "Something went wrong! Please try again.", "sources": []})
     finally:
         stop_event.set()
 
