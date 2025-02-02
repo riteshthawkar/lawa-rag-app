@@ -4,12 +4,11 @@ nltk.download('punkt_tab')
 import asyncio
 import os
 import re
-import json
 import time
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, ValidationError, constr
+from pydantic import BaseModel, Field, ValidationError
 from typing import List
 from pinecone import Pinecone
 from pinecone_text.sparse import BM25Encoder
@@ -18,28 +17,22 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from openai import AsyncOpenAI
 import logging
 
-# Ensure the required NLTK data is downloaded
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-
-# Load environment variables from .env file
+# ------------------------------------------------------------------------------
+# Load environment variables and validate required ones
+# ------------------------------------------------------------------------------
 load_dotenv(".env")
 
-# Validate required environment variables
 required_env_vars = [
-    "PINECONE_API_KEY", 
-    "PERPLEXITY_API_KEY",
-    "USER_AGENT",
-    "OPENAI_API_KEY"
+    "PINECONE_API_KEY",
+    "PERPLEXITY_API_KEY"
 ]
-
 missing_vars = [var for var in required_env_vars if not os.getenv(var)]
 if missing_vars:
     raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
+# ------------------------------------------------------------------------------
 # Configure logging
+# ------------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -50,9 +43,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ------------------------------------------------------------------------------
 # Initialize FastAPI app with CORS middleware
+# ------------------------------------------------------------------------------
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -61,7 +55,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize external services with retries
+# ------------------------------------------------------------------------------
+# Initialize external services
+# ------------------------------------------------------------------------------
 try:
     openai_client = AsyncOpenAI(
         api_key=os.getenv("PERPLEXITY_API_KEY"),
@@ -76,7 +72,9 @@ except Exception as e:
     logger.error(f"Service initialization error: {e}")
     raise
 
-# System prompt (truncated for brevity)
+# ------------------------------------------------------------------------------
+# System prompt for the chat model
+# ------------------------------------------------------------------------------
 system_prompt = """
 You are an advanced AI assistant developed by lawa.ai, designed to answer questions with precision and thoroughness. Use the provided context to craft informative and detailed responses. If the answer is not in the context, state that you do not know.
 
@@ -127,7 +125,9 @@ MBZUAI recently updated its scholarship policies to include the following:
 For further details, please refer to the official documents. If you have more specific questions, feel free to ask!
 """
 
-# Pydantic models
+# ------------------------------------------------------------------------------
+# Pydantic models for request/response validation
+# ------------------------------------------------------------------------------
 class ChatRequest(BaseModel):
     question: str = Field(..., max_length=1024)
     language: str
@@ -137,13 +137,10 @@ class CitationSource(BaseModel):
     url: str
     cite_num: str
 
-class ChatResponse(BaseModel):
-    content: str
-    citations: List[CitationSource]
-
-# Initialize Pinecone components with retries
+# ------------------------------------------------------------------------------
+# Initialize Pinecone retriever with retries
+# ------------------------------------------------------------------------------
 MAX_RETRIES = 3
-
 def initialize_pinecone():
     for attempt in range(MAX_RETRIES):
         try:
@@ -157,13 +154,16 @@ def initialize_pinecone():
                 alpha=0.6,
             )
         except Exception as e:
+            logger.warning(f"Pinecone initialization attempt {attempt+1} failed: {e}")
             if attempt == MAX_RETRIES - 1:
                 raise
-            logger.warning(f"Pinecone initialization attempt {attempt+1} failed: {e}")
             time.sleep(2 ** attempt)
 
 retriever = initialize_pinecone()
 
+# ------------------------------------------------------------------------------
+# Utility function to send messages safely over the websocket
+# ------------------------------------------------------------------------------
 async def safe_send(websocket: WebSocket, message: dict):
     try:
         await websocket.send_json(message)
@@ -174,7 +174,9 @@ async def safe_send(websocket: WebSocket, message: dict):
         logger.error(f"Error sending message: {e}")
         raise
 
-# Helper function to rerank documents using Pinecone's rerank feature
+# ------------------------------------------------------------------------------
+# Helper functions for document processing and query formatting
+# ------------------------------------------------------------------------------
 def rerank_docs(query, docs, pc_client):
     try:
         result = pc_client.inference.rerank(
@@ -185,71 +187,60 @@ def rerank_docs(query, docs, pc_client):
             top_n=20,
             return_documents=True
         )
-
-        ranked_docs = []
-        for ele in result.data:
-            ranked_docs.append({
-                "page_source": ele.document.page_source,
-                "chunk": ele.document.chunk,
-                "summary": ele.document.summary
-            })
-
+        ranked_docs = [{
+            "page_source": ele.document.page_source,
+            "chunk": ele.document.chunk,
+            "summary": ele.document.summary
+        } for ele in result.data]
         return ranked_docs
     except Exception as e:
-        print(f"Error in rerank_docs: {e}")
+        logger.error(f"Error in rerank_docs: {e}")
         raise
 
-# Helper function to format documents into a single context string
 def format_docs(docs):
     context = ""
     for index, ele in enumerate(docs):
-        context += f"\n{'=' * 150}\n**DOCUMENT:** {index + 1} \n**SOURCE:** {ele['page_source']}\n\n**CONTENT:** {ele['chunk']}\n\n"
+        context += (
+            f"\n{'=' * 150}\n"
+            f"**DOCUMENT:** {index + 1}\n"
+            f"**SOURCE:** {ele['page_source']}\n\n"
+            f"**CONTENT:** {ele['chunk']}\n\n"
+        )
     return context
 
-# Helper function to format the query with language and context
 def format_query(query, language, docs):
     formatted_docs = format_docs(docs)
-    formatted_query = f"""
-**USER QUERY:** {query} \n
-**LANGUAGE:** {language} \n
-**CONTEXT:** \n
-{formatted_docs} 
-    """
-    return formatted_query
-
+    return f"**USER QUERY:** {query}\n**LANGUAGE:** {language}\n**CONTEXT:**\n{formatted_docs}"
 
 def validate_citation_numbers(citation_numbers: List[int], max_docs: int) -> List[int]:
     return [num for num in citation_numbers if 1 <= num <= max_docs]
 
+# ------------------------------------------------------------------------------
+# WebSocket endpoint for chat functionality
+# ------------------------------------------------------------------------------
 @app.websocket("/chat")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    stop_event = asyncio.Event()
-
     try:
-        # Receive and validate request
+        # Receive and validate the request
         try:
             data = await asyncio.wait_for(websocket.receive_json(), timeout=30)
             chat_request = ChatRequest(**data)
         except ValidationError as e:
-            print("validation Error", e)
-            await safe_send(websocket, {"response": str(e)})
+            await safe_send(websocket, {"response": f"Validation error: {e}"})
             return
-        except json.JSONDecodeError:
+        except Exception as e:
             await safe_send(websocket, {"response": "Invalid JSON format"})
             return
 
-
-        # Processing pipeline
         question = chat_request.question
         language = chat_request.language
-        chunk_buffer = ""
-        complete_answer = ""
 
+        # Retrieve documents using the retriever
         try:
-            retrieve_documents = await asyncio.to_thread(retriever.invoke, question)
+            retrieved_docs = await asyncio.to_thread(retriever.invoke, question)
         except Exception as e:
-            logger.error(f"Retrieval error: {e}")
+            logger.error(f"Document retrieval error: {e}")
             await safe_send(websocket, {"response": "Document retrieval failed"})
             return
 
@@ -257,24 +248,28 @@ async def websocket_endpoint(websocket: WebSocket):
             "summary": ele.metadata.get("summary", ""),
             "chunk": ele.page_content,
             "page_source": ele.metadata.get("source", "")
-        } for ele in retrieve_documents]
+        } for ele in retrieved_docs]
 
         if not docs:
             await safe_send(websocket, {"response": "Cannot provide answer to this question"})
             return
 
+        # Rerank the documents (fallback to original docs if reranking fails)
         try:
             ranked_docs = await asyncio.to_thread(rerank_docs, question, docs, pc)
         except Exception as e:
             logger.error(f"Reranking error: {e}")
-            ranked_docs = docs  # Fallback to original docs
+            ranked_docs = docs
 
-        # Prepare messages with history truncation
+        # Prepare the conversation messages
         messages = [{"role": "system", "content": system_prompt}]
-        messages += [msg for msg in chat_request.previous_chats]
+        messages.extend(chat_request.previous_chats)
         messages.append({"role": "user", "content": format_query(question, language, ranked_docs)})
 
-        
+        complete_answer = ""
+        chunk_buffer = ""
+
+        # Generate and stream the chat response
         try:
             completion = await openai_client.chat.completions.create(
                 model="sonar",
@@ -283,29 +278,25 @@ async def websocket_endpoint(websocket: WebSocket):
                 max_completion_tokens=1024,
                 stream=True
             )
-            i = 0
             async for chunk in completion:
                 delta_content = chunk.choices[0].delta.content
                 if delta_content:
                     complete_answer += delta_content
+                    # Remove inline citation numbers from the streamed chunk
                     cleaned_content = re.sub(r'\[\d+\]', '', delta_content)
                     chunk_buffer += cleaned_content
                     if len(chunk_buffer) >= 1:
-                        await websocket.send_json({"response": chunk_buffer})
+                        await safe_send(websocket, {"response": chunk_buffer})
                         chunk_buffer = ""
-
-            # Send any remaining content in the buffer
             if chunk_buffer:
-                await websocket.send_json({"response": chunk_buffer})
-
-
+                await safe_send(websocket, {"response": chunk_buffer})
         except Exception as e:
             logger.error(f"Streaming error: {e}")
             await safe_send(websocket, {"response": "Response generation failed", "sources": []})
             return
 
+        # Process and map citations
         citations = []
-        # Collect citation numbers in order of appearance without duplicates
         seen_nums = set()
         citation_numbers = []
         for num_str in re.findall(r'\[(\d+)\]', complete_answer):
@@ -318,26 +309,22 @@ async def websocket_endpoint(websocket: WebSocket):
         seen_urls = {}
         citation_map = {}
         current_num = 1
-        
         for num in valid_citations:
             try:
                 url = ranked_docs[num-1]["page_source"]
                 if url not in seen_urls:
-                    # New URL, assign the next consecutive number
                     citation_map[num] = current_num
                     seen_urls[url] = current_num
                     citations.append({"url": url, "cite_num": str(current_num)})
                     current_num += 1
                 else:
-                    # Map to existing citation number
                     citation_map[num] = seen_urls[url]
             except IndexError:
                 continue
 
-        # Replace citations in text
         def replace_citation(match):
             original = int(match.group(1))
-            new_num = citation_map.get(original, original)  # Default to original if not mapped
+            new_num = citation_map.get(original, original)
             url = next((c["url"] for c in citations if c["cite_num"] == str(new_num)), "")
             return f"[{new_num}]({url})" if url else f"[{new_num}]"
 
@@ -353,9 +340,10 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         await safe_send(websocket, {"response": "Something went wrong! Please try again.", "sources": []})
-    finally:
-        stop_event.set()
 
+# ------------------------------------------------------------------------------
+# Simple health check endpoint
+# ------------------------------------------------------------------------------
 @app.get("/")
 async def root():
     return {"message": "working"}
