@@ -15,7 +15,7 @@ from pinecone import Pinecone
 from pinecone_text.sparse import BM25Encoder
 from langchain_community.retrievers import PineconeHybridSearchRetriever
 from langchain_huggingface import HuggingFaceEmbeddings
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 import logging
 
 # Ensure the required NLTK data is downloaded
@@ -63,9 +63,9 @@ app.add_middleware(
 
 # Initialize external services with retries
 try:
-    openai_client = OpenAI(
-        api_key=os.getenv("PERPLEXITY_API_KEY"),
-        base_url="https://api.perplexity.ai"
+    openai_client = AsyncOpenAI(
+        api_key=os.getenv("OPENAI_API_KEY"),
+        # base_url="https://api.perplexity.ai"
     )
     pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
     embed_model = HuggingFaceEmbeddings(
@@ -224,7 +224,6 @@ def validate_citation_numbers(citation_numbers: List[int], max_docs: int) -> Lis
 @app.websocket("/chat")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    send_task = None
     stop_event = asyncio.Event()
 
     try:
@@ -240,17 +239,6 @@ async def websocket_endpoint(websocket: WebSocket):
             await safe_send(websocket, {"response": "Invalid JSON format"})
             return
 
-        # Background task to send buffered chunks
-        async def send_buffered_chunks():
-            nonlocal chunk_buffer
-            while not stop_event.is_set():
-                await asyncio.sleep(2)
-                if chunk_buffer:
-                    try:
-                        await safe_send(websocket, {"response": chunk_buffer})
-                        chunk_buffer = ""
-                    except:
-                        break
 
         # Processing pipeline
         question = chat_request.question
@@ -258,13 +246,11 @@ async def websocket_endpoint(websocket: WebSocket):
         chunk_buffer = ""
         complete_answer = ""
 
-        # Document retrieval
-        await safe_send(websocket, {"status": "retrieving"})
         try:
             retrieve_documents = await asyncio.to_thread(retriever.invoke, question)
         except Exception as e:
             logger.error(f"Retrieval error: {e}")
-            await safe_send(websocket, {"error": "Document retrieval failed"})
+            await safe_send(websocket, {"response": "Document retrieval failed"})
             return
 
         docs = [{
@@ -274,47 +260,49 @@ async def websocket_endpoint(websocket: WebSocket):
         } for ele in retrieve_documents]
 
         if not docs:
-            await safe_send(websocket, {"status": "no_documents_found"})
+            await safe_send(websocket, {"response": "Cannot provide answer to this question"})
             return
 
-        # Document reranking
-        await safe_send(websocket, {"status": "reranking"})
         try:
             ranked_docs = await asyncio.to_thread(rerank_docs, question, docs, pc)
         except Exception as e:
             logger.error(f"Reranking error: {e}")
             ranked_docs = docs  # Fallback to original docs
 
-        print(chat_request.previous_chats)
         # Prepare messages with history truncation
         messages = [{"role": "system", "content": system_prompt}]
         messages += [msg for msg in chat_request.previous_chats[:-1]]
         messages.append({"role": "user", "content": format_query(question, language, ranked_docs)})
 
-        # Stream response
-        send_task = asyncio.create_task(send_buffered_chunks())
         
         try:
-            completion = openai_client.chat.completions.create(
-                model="sonar",
+            completion = await openai_client.chat.completions.create(
+                model="gpt-4o-mini",
                 messages=messages,
                 temperature=0.8,
                 max_completion_tokens=1024,
                 stream=True
             )
+            i = 0
+            async for chunk in completion:
+                delta_content = chunk.choices[0].delta.content
+                if delta_content:
+                    complete_answer += delta_content
+                    cleaned_content = re.sub(r'\[\d+\]', '', delta_content)
+                    chunk_buffer += cleaned_content
+                    if len(chunk_buffer) >= 20:
+                        await websocket.send_json({"response": chunk_buffer})
+                        chunk_buffer = ""
+                        
+            # Send any remaining content in the buffer
+            if chunk_buffer:
+                await websocket.send_json({"response": chunk_buffer})
 
-            for chunk in completion:
-                if chunk.choices[0].delta.content:
-                    complete_answer += (delta := chunk.choices[0].delta.content)
-                    chunk_buffer += delta
 
         except Exception as e:
             logger.error(f"Streaming error: {e}")
-            await safe_send(websocket, {"error": "Response generation failed"})
+            await safe_send(websocket, {"response": "Response generation failed"})
             return
-        finally:
-            stop_event.set()
-            await send_task
 
         citations = []
         # Collect citation numbers in order of appearance without duplicates
@@ -367,5 +355,3 @@ async def websocket_endpoint(websocket: WebSocket):
         await safe_send(websocket, {"response": "Something went wrong! Please try again."})
     finally:
         stop_event.set()
-        if send_task and not send_task.done():
-            await send_task
