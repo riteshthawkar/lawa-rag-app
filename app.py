@@ -14,6 +14,7 @@ except LookupError:
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 from typing import List, Dict, Tuple
 
@@ -22,6 +23,7 @@ from pinecone_text.sparse import BM25Encoder
 from langchain_community.retrievers import PineconeHybridSearchRetriever
 from langchain_huggingface import HuggingFaceEmbeddings
 from openai import AsyncOpenAI
+
 
 # ------------------------------------------------------------------------------
 # Load environment variables and validate required ones
@@ -411,4 +413,4 @@ async def websocket_endpoint(websocket: WebSocket):
 # ------------------------------------------------------------------------------
 @app.get("/")
 async def root():
-    return {"message": "working"}
+    return JSONResponse(content={"message": "working"})
