@@ -371,10 +371,10 @@ async def websocket_endpoint(websocket: WebSocket):
         # Generate and stream the chat response
         try:
             completion = await openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 messages=messages,
-                temperature=0.5,
-                max_completion_tokens=1024,  # Hardcoded as required
+                temperature=0.2,
+                max_completion_tokens=1024,
                 stream=True
             )
             async for chunk in completion:
