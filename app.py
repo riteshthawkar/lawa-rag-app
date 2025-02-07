@@ -3,6 +3,7 @@ import os
 import re
 import time
 import logging
+import json
 
 import nltk
 # Pre-download the required nltk resource if not already available.
@@ -17,13 +18,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 from typing import List, Dict, Tuple
-
+import httpx
 from pinecone import Pinecone
 from pinecone_text.sparse import BM25Encoder
 from langchain_community.retrievers import PineconeHybridSearchRetriever
 from langchain_huggingface import HuggingFaceEmbeddings
 from openai import AsyncOpenAI
-
 
 # ------------------------------------------------------------------------------
 # Load environment variables and validate required ones
@@ -74,107 +74,89 @@ try:
         model_kwargs={"trust_remote_code": True}
     )
 except Exception as e:
-    logger.error(f"Service initialization error: {e}")
+    logger.exception("Service initialization error:")
     raise
 
 # ------------------------------------------------------------------------------
 # System prompt for the chat model
 # ------------------------------------------------------------------------------
-system_prompt = """ You are an **advanced AI assistant developed by lawa.ai**, designed to provide **precise, fact-based, and well-structured** responses to user queries. Your responses should be based **only** on the provided context, ensuring **accuracy, clarity, and transparency**.
+system_prompt = """ You are an **advanced AI assistant developed by lawa.ai**, designed to provide **highly accurate, well-structured, and factual** responses strictly related to **UAE government topics**. Your expertise includes (but is not limited to):  
 
-If the context **does not contain** the answer, **state this explicitly** rather than guessing or making assumptions.
+✅ **Policies & Regulations** – Government policies, legal frameworks, and administrative procedures.  
+✅ **Laws & Legislation** – UAE laws, judiciary, and governance-related legal provisions.  
+✅ **Government & Public Services** – Ministries, public sector operations, and digital government services.  
+✅ **Culture & Heritage** – Emirati traditions, customs, and significant cultural elements.  
+✅ **Tourism & Economy** – UAE's economic landscape, business regulations, and tourism policies.  
+✅ **History & National Identity** – UAE's formation, rulers, and historical events shaping the nation.  
 
----
-### **📌 Response Guidelines**
-
-#### **1️⃣ Precision & Clarity**
-- Format responses in **Markdown** for enhanced readability.
-- Match the **response language** to the query's "Language" field.
-- Ensure responses are **concise yet comprehensive**, avoiding excessive elaboration.
-
-#### **2️⃣ Citing Sources Transparently**
-- Use **numerical citations** ([1], [2], etc.) to indicate the source document of the information.
-- Citations must be **placed immediately after the relevant statement**.
-- Ensure citations map correctly to the order of documents in the provided context.
-
-#### **3️⃣ Formatting for Readability**
-- Use **bold text**, *italic text*, bullet points, and headings for emphasis.
-- Organize responses into **logical sections** to improve structure.
-- Provide **tables or bullet points** where appropriate for numerical/statistical data.
-
-#### **4️⃣ Strictly Adhere to Context**
-- Use **only** information from the provided context.
-- **Do not** include external knowledge or speculate on missing details.
-
-#### **5️⃣ Handling Missing or Insufficient Context**
-- If the context does **not contain** a clear answer, respond with:  
-  🛑 *"The provided context does not contain relevant information to answer your question."*
-- If general knowledge is allowed, provide a well-informed but **non-speculative** response.
-
-#### **6️⃣ Avoiding AI Hallucinations**
-- **Do not fabricate data, statistics, or references**.
-- **Do not assume missing details**—state explicitly if something is unclear.
-
-#### **7️⃣ Self-Identification When Asked**
-- If requested, clearly state:  
-  *"I am an AI assistant developed by lawa.ai, designed to provide accurate responses based on provided context."*
+### **🚫 Strict Scope Restriction**
+- **You must NEVER answer questions that are unrelated to UAE government topics.**  
+- If a query is out of scope, respond with:  
+  🛑 *"The question is out of my scope. I can only answer questions related to UAE governance, laws, economy, tourism, or other official matters."*  
+- **Do not attempt to generate speculative, hypothetical, or external information.**  
 
 ---
-### **📌 Strict Rules for Response Generation**
-✅ **Never mention the word "context" in responses.**  
-✅ **Use only the relevant content from the provided context.**  
-✅ **If no relevant information exists, say so explicitly.**  
+
+## **📌 RESPONSE GUIDELINES**
+
+### **1️⃣ Accuracy & Context Adherence**
+- **Use only the provided context** when answering.  
+- If no relevant information exists, respond with:  
+  🛑 *"The provided context does not contain relevant information to answer your question."*  
+- **Never use external knowledge, assumptions, or generalizations.**  
+
+### **2️⃣ Precision & Clarity**
+- Format responses in **Markdown** for structured readability.  
+- Use the **same language** as the query for consistency.  
+- Ensure answers are **comprehensive yet concise**, avoiding unnecessary elaboration.  
+
+### **3️⃣ Citations & Source Transparency**
+- **All factual statements must be backed by a citation** from the provided context.  
+- Use **numerical citations** ([1], [2], etc.) and ensure they directly reference the correct document.  
+- Never **invent or misplace citations**—they must accurately reflect the order of documents in the provided context.  
+
+### **4️⃣ Structured Formatting for Readability**
+- Use **bold headings, bullet points, and clear sections** for clarity.  
+- **Tables, lists, and structured formatting** should be used for numerical/statistical data.  
+- If relevant, include **step-by-step instructions** for procedural responses.  
+
+### **5️⃣ Handling Out-of-Scope Queries**
+- If a query **does not relate to UAE government topics**, provide only the scope restriction message.  
+- **Do not generate any additional or speculative content.**  
+
+### **6️⃣ Strict Avoidance of AI Hallucinations**
+- **Do not fabricate information, data, statistics, or sources.**  
+- **Do not assume missing details**—clearly state if information is unavailable.  
+- **Do not create opinions, subjective interpretations, or hypothetical scenarios.**  
+
+### **7️⃣ Self-Identification When Asked**
+- If asked about your identity, state:  
+  *"I am an AI assistant developed by lawa.ai, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."*  
 
 ---
-### **📌 Input Format Example**
-**User Query:**  
-*"What are the latest updates on the scholarship policies at MBZUAI?"*  
-**Language:** *English*  
-**Context:**  
+
+## **📌 INPUT FORMAT EXAMPLE**
+### **User Query:**  
+*"What recent changes have been made to UAE tourism policies?"*  
+### **Language:**  
+*English*  
+### **Context:**  
 ```text
 <provided context>
 ```
 
 ---
-### **📌 Expected Output Format**
+
+## **📌 EXPECTED OUTPUT FORMAT**
 ```markdown
-### **Latest Updates on MBZUAI Scholarship Policies**
-MBZUAI recently updated its scholarship policies to include the following:
+### **Recent Changes in UAE Tourism Policies**
+The UAE government has recently introduced several updates to its tourism policies:
 
-1. **Scholarship Coverage:** Full tuition fees, accommodation, and a monthly stipend. [1]  
-2. **Eligibility Criteria:** Applicants must maintain a GPA of 3.5 or higher. [2]  
+1. **Visa Policy Adjustments:** New regulations on visa durations and eligibility criteria. [1]  
+2. **Sustainable Tourism Initiatives:** Introduction of eco-friendly projects to enhance the tourism sector. [2]  
+3. **Updated Hotel Licensing Rules:** Stricter compliance measures for hospitality establishments. [3]  
 
-For further details, please refer to the official documents. If you have more specific questions, feel free to ask!
-```
-
----
-### **📌 Example Question & Response**
-#### **User Query:**  
-*"I overstayed my tourist visa in the UAE. What penalties or fines will I face, and how can I resolve this legally?"*  
-#### **Provided Context:**  
-```text
-<related regulations on visa overstay penalties>
-```
-#### **Generated Response:**  
-```markdown
-### **UAE Tourist Visa Overstay Penalties**
-Overstaying a UAE tourist visa incurs specific penalties and requires prompt action to avoid legal issues.
-
-#### **Fines & Fees**
-- **Daily Fine:** AED 50 per day beyond the visa expiry. [1]  
-- **Exit Fee:** Additional AED 200 upon departure. [2]  
-
-#### **Steps to Resolve the Issue**
-1. **Calculate Total Fines:** Multiply overstayed days by AED 50 and add any exit fees.
-2. **Visit an Immigration Office:** Report to the General Directorate of Residency and Foreigners Affairs (GDRFA) or an Amer service center in Dubai.
-3. **Pay the Fines:** Payments can be made at immigration offices, airports, land borders, or seaports upon departure. [3]  
-4. **Apply for a Visa Extension:** If you wish to stay longer, request a visa extension or status change before expiry. [4]  
-
-#### **Additional Considerations**
-- **Grace Period:** Some visas offer a grace period before fines apply. [5]  
-- **Legal Assistance:** If needed, consult immigration experts for further guidance.  
-
-Acting promptly helps minimize fines and maintain a clean immigration record in the UAE.
+For further details, please refer to the official documents provided in the context. If you need specific clarifications, feel free to ask!
 ```
 """
 
@@ -210,6 +192,7 @@ def initialize_pinecone():
         except Exception as e:
             logger.warning(f"Pinecone initialization attempt {attempt + 1} failed: {e}")
             if attempt == MAX_RETRIES - 1:
+                logger.exception("Failed to initialize Pinecone after multiple attempts.")
                 raise
             time.sleep(2 ** attempt)
 
@@ -225,7 +208,7 @@ async def safe_send(websocket: WebSocket, message: dict):
         logger.info("Client disconnected during send")
         raise
     except Exception as e:
-        logger.error(f"Error sending message: {e}")
+        logger.exception("Error sending message:")
         raise
 
 # ------------------------------------------------------------------------------
@@ -248,7 +231,7 @@ def rerank_docs(query: str, docs: List[dict], pc_client: Pinecone) -> List[dict]
         } for ele in result.data]
         return ranked_docs
     except Exception as e:
-        logger.error(f"Error in rerank_docs: {e}")
+        logger.exception("Error in rerank_docs:")
         raise
 
 def format_docs(docs: List[dict]) -> str:
@@ -313,6 +296,44 @@ def process_citations(complete_answer: str, ranked_docs: List[dict]) -> Tuple[st
     return updated_answer, sorted(citations, key=lambda x: int(x["cite_num"]))
 
 # ------------------------------------------------------------------------------
+# Fallback search using Tavily – now using an asynchronous HTTP client and using the user's query.
+# ------------------------------------------------------------------------------
+async def tavily_search(question: str) -> List[dict]:
+    try:
+        # It is best practice not to hardcode API keys.
+        api_key = os.getenv("TAVILY_API_KEY")
+        url = "https://api.tavily.com/search"
+        payload = {
+            "query": question,  # now using the passed-in question
+            "search_depth": "advanced",
+            "topic": "general",
+            "max_results": 5,
+            "include_answer": False,
+            "include_raw_content": True,
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        results = data.get("results", [])
+        result_docs = []
+        for result in results:
+            obj = {
+                "page_source": result.get("url", ""),
+                "chunk": result.get("raw_content", "")
+            }
+            result_docs.append(obj)
+        return result_docs
+    except Exception as e:
+        logger.exception("Error in tavily_search:")
+        # In production you might return an empty list or a fallback response.
+        return []
+
+# ------------------------------------------------------------------------------
 # WebSocket endpoint for chat functionality with improved error handling
 # ------------------------------------------------------------------------------
 @app.websocket("/chat")
@@ -323,13 +344,13 @@ async def websocket_endpoint(websocket: WebSocket):
         try:
             data = await asyncio.wait_for(websocket.receive_json(), timeout=30)
             chat_request = ChatRequest(**data)
-        except ValidationError as e:
-            logger.error(f"Validation error: {e}")
-            await safe_send(websocket, {"response": "Something went wrong with your request!", "sources": []})
+        except ValidationError as ve:
+            logger.exception("Validation error:")
+            await safe_send(websocket, {"response": "Invalid request format.", "sources": []})
             return
         except Exception as e:
-            logger.error(f"Error receiving data: {e}")
-            await safe_send(websocket, {"response": "Something went wrong with your request!", "sources": []})
+            logger.exception("Error receiving data:")
+            await safe_send(websocket, {"response": "Error receiving request data.", "sources": []})
             return
 
         question = chat_request.question
@@ -339,8 +360,8 @@ async def websocket_endpoint(websocket: WebSocket):
         try:
             retrieved_docs = await asyncio.to_thread(retriever.invoke, question)
         except Exception as e:
-            logger.error(f"Document retrieval error: {e}")
-            await safe_send(websocket, {"response": "Document retrieval failed", "sources": []})
+            logger.exception("Document retrieval error:")
+            await safe_send(websocket, {"response": "Error retrieving documents. Please try again later.", "sources": []})
             return
 
         docs = [{
@@ -350,14 +371,14 @@ async def websocket_endpoint(websocket: WebSocket):
         } for ele in retrieved_docs]
 
         if not docs:
-            await safe_send(websocket, {"response": "Cannot provide answer to this question", "sources": []})
+            await safe_send(websocket, {"response": "No documents found to answer your question.", "sources": []})
             return
 
         # Rerank the documents (fallback to original docs if reranking fails)
         try:
             ranked_docs = await asyncio.to_thread(rerank_docs, question, docs, pc)
         except Exception as e:
-            logger.error(f"Reranking error: {e}")
+            logger.exception("Reranking error:")
             ranked_docs = docs
 
         # Prepare the conversation messages
@@ -367,19 +388,23 @@ async def websocket_endpoint(websocket: WebSocket):
 
         complete_answer = ""
         chunk_buffer = ""
+        isResponseAvailable = True
 
         # Generate and stream the chat response
         try:
             completion = await openai_client.chat.completions.create(
                 model="gpt-4o",
                 messages=messages,
-                temperature=0.2,
+                temperature=0,
                 max_completion_tokens=1024,
                 stream=True
             )
             async for chunk in completion:
                 delta_content = chunk.choices[0].delta.content
                 if delta_content:
+                    if "🛑" in delta_content:
+                        isResponseAvailable = False
+                        break
                     complete_answer += delta_content
                     # Remove inline citation markers from the streamed chunk before sending
                     cleaned_content = re.sub(r'\[\d+\]', '', delta_content)
@@ -390,23 +415,59 @@ async def websocket_endpoint(websocket: WebSocket):
             if chunk_buffer:
                 await safe_send(websocket, {"response": chunk_buffer})
         except Exception as e:
-            logger.error(f"Streaming error: {e}")
-            await safe_send(websocket, {"response": "Response generation failed", "sources": []})
+            logger.exception("Error during streaming response:")
+            await safe_send(websocket, {"response": "Response generation failed. Please try again later.", "sources": []})
             return
 
+        # If the response indicates no answer available, perform fallback search and reattempt generation.
+        if not isResponseAvailable:
+            ranked_docs = await tavily_search(question)
+            messages[-1] = {"role": "user", "content": format_query(question, language, ranked_docs)}
+            try:
+                completion = await openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages,
+                    temperature=0.2,
+                    max_completion_tokens=1024,
+                    stream=True
+                )
+                async for chunk in completion:
+                    delta_content = chunk.choices[0].delta.content
+                    if delta_content:
+                        complete_answer += delta_content
+                        # Remove inline citation markers from the streamed chunk before sending
+                        cleaned_content = re.sub(r'\[\d+\]', '', delta_content)
+                        chunk_buffer += cleaned_content
+                        if len(chunk_buffer) >= 1:
+                            await safe_send(websocket, {"response": chunk_buffer})
+                            chunk_buffer = ""
+                if chunk_buffer:
+                    await safe_send(websocket, {"response": chunk_buffer})
+            except Exception as e:
+                logger.exception("Error during fallback streaming:")
+                await safe_send(websocket, {"response": "Fallback response generation failed.", "sources": []})
+                return
+
         # Process and map citations in the final answer
-        complete_answer, citations = process_citations(complete_answer, ranked_docs)
+        try:
+            updated_answer, citations = process_citations(complete_answer, ranked_docs)
+        except Exception as e:
+            logger.exception("Error processing citations:")
+            updated_answer, citations = complete_answer, []
 
         await safe_send(websocket, {
-            "response": complete_answer,
+            "response": updated_answer,
             "sources": citations
         })
 
     except WebSocketDisconnect:
         logger.info("Client disconnected")
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        await safe_send(websocket, {"response": "Something went wrong! Please try again.", "sources": []})
+        logger.exception("Unexpected error in websocket endpoint:")
+        try:
+            await safe_send(websocket, {"response": "An unexpected error occurred. Please try again later.", "sources": []})
+        except Exception:
+            pass  # The connection may already be closed.
 
 # ------------------------------------------------------------------------------
 # Simple health check endpoint
