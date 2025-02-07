@@ -361,7 +361,7 @@ async def websocket_endpoint(websocket: WebSocket):
             retrieved_docs = await asyncio.to_thread(retriever.invoke, question)
         except Exception as e:
             logger.exception("Document retrieval error:")
-            await safe_send(websocket, {"response": "Error retrieving documents. Please try again later.", "sources": []})
+            await safe_send(websocket, {"response": "This question is out of my scope. Please try again with an another question.", "sources": []})
             return
 
         docs = [{
@@ -371,7 +371,7 @@ async def websocket_endpoint(websocket: WebSocket):
         } for ele in retrieved_docs]
 
         if not docs:
-            await safe_send(websocket, {"response": "No documents found to answer your question.", "sources": []})
+            await safe_send(websocket, {"response": "No information found to answer your question.", "sources": []})
             return
 
         # Rerank the documents (fallback to original docs if reranking fails)
