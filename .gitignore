@@ -5,3 +5,4 @@ app.log
 env/
 __pycache__/
 bm25_json_files/
+main.py
