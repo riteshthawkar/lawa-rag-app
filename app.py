@@ -475,3 +475,8 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.get("/")
 async def root():
     return JSONResponse(content={"message": "working"})
+
+
+@app.get("/health")
+async def root():
+    return JSONResponse(content={"message": "working"})
