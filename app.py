@@ -469,6 +469,144 @@ async def websocket_endpoint(websocket: WebSocket):
         except Exception:
             pass  # The connection may already be closed.
 
+
+
+
+
+
+# ------------------------------------------------------------------------------
+# WebSocket endpoint for chat functionality with improved error handling
+# ------------------------------------------------------------------------------
+@app.websocket("/telegram-chat")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        # Receive and validate the request
+        try:
+            data = await asyncio.wait_for(websocket.receive_json(), timeout=30)
+            chat_request = ChatRequest(**data)
+        except ValidationError as ve:
+            logger.exception("Validation error:")
+            await safe_send(websocket, {"response": "Invalid request format.", "sources": []})
+            return
+        except Exception as e:
+            logger.exception("Error receiving data:")
+            await safe_send(websocket, {"response": "Error receiving request data.", "sources": []})
+            return
+
+        question = chat_request.question
+        language = chat_request.language
+
+        # Retrieve documents using the retriever
+        try:
+            retrieved_docs = await asyncio.to_thread(retriever.invoke, question)
+        except Exception as e:
+            logger.exception("Document retrieval error:")
+            await safe_send(websocket, {"response": "This question is out of my scope. Please try again with an another question.", "sources": []})
+            return
+
+        docs = [{
+            "summary": ele.metadata.get("summary", ""),
+            "chunk": ele.page_content,
+            "page_source": ele.metadata.get("source", "")
+        } for ele in retrieved_docs]
+
+        if not docs:
+            await safe_send(websocket, {"response": "No information found to answer your question.", "sources": []})
+            return
+
+        # Rerank the documents (fallback to original docs if reranking fails)
+        try:
+            ranked_docs = await asyncio.to_thread(rerank_docs, question, docs, pc)
+        except Exception as e:
+            logger.exception("Reranking error:")
+            ranked_docs = docs
+
+        # Prepare the conversation messages
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(chat_request.previous_chats)
+        messages.append({"role": "user", "content": format_query(question, language, ranked_docs)})
+
+        complete_answer = ""
+        chunk_buffer = ""
+        isResponseAvailable = True
+
+        # Generate and stream the chat response
+        try:
+            completion = await openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                temperature=0,
+                max_completion_tokens=1024,
+                stream=True
+            )
+            async for chunk in completion:
+                delta_content = chunk.choices[0].delta.content
+                if delta_content:
+                    if "🛑" in delta_content:
+                        isResponseAvailable = False
+                        break
+                    complete_answer += delta_content
+                    # Remove inline citation markers from the streamed chunk before sending
+                    cleaned_content = re.sub(r'\[\d+\]', '', delta_content)
+                    chunk_buffer += cleaned_content
+        except Exception as e:
+            logger.exception("Error during streaming response:")
+            await safe_send(websocket, {"response": "Response generation failed. Please try again later.", "sources": []})
+            return
+
+        # If the response indicates no answer available, perform fallback search and reattempt generation.
+        if not isResponseAvailable:
+            ranked_docs = await tavily_search(question)
+            messages[-1] = {"role": "user", "content": format_query(question, language, ranked_docs)}
+            try:
+                completion = await openai_client.chat.completions.create(
+                    model="gpt-4o-mini-2024-07-18",
+                    messages=messages,
+                    temperature=0.2,
+                    max_completion_tokens=1024,
+                    stream=True
+                )
+                async for chunk in completion:
+                    delta_content = chunk.choices[0].delta.content
+                    if delta_content:
+                        complete_answer += delta_content
+                        # Remove inline citation markers from the streamed chunk before sending
+                        cleaned_content = re.sub(r'\[\d+\]', '', delta_content)
+                        chunk_buffer += cleaned_content
+                        if len(chunk_buffer) >= 1:
+                            await safe_send(websocket, {"response": chunk_buffer})
+                            chunk_buffer = ""
+                if chunk_buffer:
+                    await safe_send(websocket, {"response": chunk_buffer})
+            except Exception as e:
+                logger.exception("Error during fallback streaming:")
+                await safe_send(websocket, {"response": "Fallback response generation failed.", "sources": []})
+                return
+
+        # Process and map citations in the final answer
+        try:
+            updated_answer, citations = process_citations(complete_answer, ranked_docs)
+        except Exception as e:
+            logger.exception("Error processing citations:")
+            updated_answer, citations = complete_answer, []
+
+        await safe_send(websocket, {
+            "response": updated_answer,
+            "sources": citations
+        })
+
+    except WebSocketDisconnect:
+        logger.info("Client disconnected")
+    except Exception as e:
+        logger.exception("Unexpected error in websocket endpoint:")
+        try:
+            await safe_send(websocket, {"response": "An unexpected error occurred. Please try again later.", "sources": []})
+        except Exception:
+            pass  # The connection may already be closed.
+
+
+
 # ------------------------------------------------------------------------------
 # Simple health check endpoint
 # ------------------------------------------------------------------------------
