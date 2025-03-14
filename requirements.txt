@@ -11,3 +11,4 @@ httpx
 asyncio
 transformers
 sentence-transformers
+uvicorn[standard]
