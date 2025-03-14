@@ -47,5 +47,27 @@ def process_citations(complete_answer: str, ranked_docs: List[dict]) -> Tuple[st
         url = next((c["url"] for c in citations if c["cite_num"] == str(new_num)), "")
         return f"[{new_num}]({url})" if url else f"[{new_num}]"
 
+    # First replace all citations with their new numbers
     updated_answer = re.sub(r'\[(\d+)\]', replace_citation, complete_answer)
+    
+    # Remove duplicate adjacent citations in a loop until no more changes are made
+    prev_answer = ""
+    while prev_answer != updated_answer:
+        prev_answer = updated_answer
+        
+        # Handle citations with URLs: [n](url)[n](url)
+        updated_answer = re.sub(r'\[(\d+)\]\(([^)]+)\)\s*\[(\1)\]\([^)]+\)', r'[\1](\2)', updated_answer)
+        
+        # Handle citations without URLs: [n][n]
+        updated_answer = re.sub(r'\[(\d+)\]\s*\[(\1)\]', r'[\1]', updated_answer)
+        
+        # Handle cases with whitespace or other characters between duplicate citations
+        updated_answer = re.sub(r'\[(\d+)\](?:\s*[,.;:]?\s*)\[(\1)\]', r'[\1]', updated_answer)
+        
+        # Handle cases where there might be a period or comma between citations
+        updated_answer = re.sub(r'\[(\d+)\](?:\s*[,.;:]?\s*)\[(\1)\]', r'[\1]', updated_answer)
+    
+    # Clean up any potential artifacts from the replacements
+    updated_answer = re.sub(r'\s+([,.;:])', r'\1', updated_answer)
+    
     return updated_answer, sorted(citations, key=lambda x: int(x["cite_num"])) 

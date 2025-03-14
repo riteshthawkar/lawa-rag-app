@@ -124,14 +124,14 @@ Example 8 - Identity Question:
 User query: "Who are you?"
 Analysis: {
   "action": "identity",
-  "response": "I am an AI assistant developed by lawa.ai, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
+  "response": "I am an AI assistant developed by `lawa.ai`, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
 }
 
 Example 9 - Identity Question Variation:
 User query: "What model are you using?"
 Analysis: {
   "action": "identity",
-  "response": "I am an AI assistant developed by lawa.ai, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
+  "response": "I am an AI assistant developed by `lawa.ai`, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
 }
 
 User query: {{query}}
@@ -197,7 +197,7 @@ async def query_rewriting_agent(question: str, language: str, message_history: L
         elif action == "identity":
             return {
                 "action": "respond",
-                "response": "I am an AI assistant developed by lawa.ai, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
+                "response": "I am an AI assistant developed by `lawa.ai`, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
             }
         else:
             # Fallback for unexpected actions
