@@ -9,6 +9,9 @@ openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Prompt for the query rewriting agent
 query_agent_prompt = """You are an expert query analyzer for a UAE government information system. 
+
+IMPORTANT: Initially assume every query could be relevant to UAE government entity or program. Consider all possible ways the query might relate to UAE government, even indirectly. Accept queries that are hard to judge as unrelated unless they are clearly and unmistakably out of scope.
+
 Your job is to examine user queries and determine the appropriate action:
 
 1. REWRITE: If the query is related to UAE government topics but could be improved for better retrieval.
@@ -23,6 +26,10 @@ UAE government topics include:
 - UAE culture and heritage
 - Tourism and economy in UAE
 - UAE history and national identity
+- Abu Dhabi Agriculture and Food Security Authority (ADAFSA)
+- Abu Dhabi Department of Economic Development
+- Abu Dhabi TAMM services
+
 
 OUT OF SCOPE topics include:
 - Personal advice or opinions

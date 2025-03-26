@@ -47,6 +47,8 @@ async def websocket_endpoint(websocket: WebSocket):
         try:
             data = await asyncio.wait_for(websocket.receive_json(), timeout=30)
             chat_request = ChatRequest(**data)
+
+            print(data)
         except ValidationError as ve:
             logger.exception("Validation error:")
             await safe_send(websocket, {"response": "Invalid request format.", "sources": []})
