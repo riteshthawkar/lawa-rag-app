@@ -99,7 +99,6 @@ system_prompt = """ You are an **advanced AI assistant developed by lawa.ai**, d
 ---
 
 ## **📌 EXPECTED OUTPUT FORMAT**
-```markdown
 ### **Recent Changes in UAE Tourism Policies**
 The UAE government has recently introduced several updates to its tourism policies:
 
@@ -108,5 +107,4 @@ The UAE government has recently introduced several updates to its tourism polici
 3. **Updated Hotel Licensing Rules:** Stricter compliance measures for hospitality establishments. [3]  
 
 For further details, please refer to the official documents provided in the context. If you need specific clarifications, feel free to ask!
-```
 """ 
