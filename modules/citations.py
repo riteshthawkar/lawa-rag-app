@@ -65,7 +65,20 @@ def process_citations(complete_answer: str, ranked_docs: List[dict]) -> Tuple[st
     def replace_citation(match):
         original = int(match.group(1))
         new_num = citation_map.get(original, original)
+        
+        # Find the URL for this citation number
         url = next((c["url"] for c in citations if c["cite_num"] == str(new_num)), "")
+        
+        # If URL is missing but the citation number is valid, try to get it directly from ranked_docs
+        if not url and 1 <= original <= len(ranked_docs):
+            try:
+                url = ranked_docs[original - 1].get("page_source", "")
+                # If we found a URL, add it to citations for future reference
+                if url and new_num not in [int(c["cite_num"]) for c in citations]:
+                    citations.append({"url": url, "cite_num": str(new_num)})
+            except (IndexError, KeyError):
+                logger.warning(f"Could not find URL for citation {original}")
+        
         return f"[{new_num}]({url})" if url else f"[{new_num}]"
 
     # Replace all citations with their new numbers
@@ -76,17 +89,28 @@ def process_citations(complete_answer: str, ranked_docs: List[dict]) -> Tuple[st
     while prev_answer != updated_answer:
         prev_answer = updated_answer
         
-        # Handle citations with URLs: [n](url)[n](url)
+        # Handle citations with URLs: [n](url)[n](url) - only for identical citation numbers
         updated_answer = re.sub(r'\[(\d+)\]\(([^)]+)\)\s*\[(\1)\]\([^)]+\)', r'[\1](\2)', updated_answer)
         
-        # Handle citations without URLs: [n][n]
+        # Handle citations without URLs: [n][n] - only for identical citation numbers
         updated_answer = re.sub(r'\[(\d+)\]\s*\[(\1)\]', r'[\1]', updated_answer)
         
         # Handle cases with whitespace or other characters between duplicate citations
         updated_answer = re.sub(r'\[(\d+)\](?:\s*[,.;:]?\s*)\[(\1)\]', r'[\1]', updated_answer)
         
-        # Handle cases where there might be a period or comma between citations
-        updated_answer = re.sub(r'\[(\d+)\](?:\s*[,.;:]?\s*)\[(\1)\]', r'[\1]', updated_answer)
+        # Ensure different citation numbers next to each other are preserved and properly formatted
+        # This pattern looks for two adjacent citation numbers that are different
+        # and ensures both have proper URL formatting
+        for match in re.finditer(r'\[(\d+)\](?:\([^)]*\))?\s*\[(\d+)\](?:\([^)]*\))?', updated_answer):
+            if match.group(1) != match.group(2):  # Different citation numbers
+                # Get URLs for both citations
+                url1 = next((c["url"] for c in citations if c["cite_num"] == match.group(1)), "")
+                url2 = next((c["url"] for c in citations if c["cite_num"] == match.group(2)), "")
+                
+                # Replace with properly formatted citations
+                pattern = re.escape(match.group(0))
+                replacement = f"[{match.group(1)}]({url1}) [{match.group(2)}]({url2})"
+                updated_answer = re.sub(pattern, replacement, updated_answer)
     
     # Clean up any potential artifacts from the replacements
     updated_answer = re.sub(r'\s+([,.;:])', r'\1', updated_answer)
