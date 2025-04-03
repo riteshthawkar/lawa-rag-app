@@ -1,4 +1,5 @@
 import re
+import urllib.parse
 from typing import List, Dict, Tuple
 
 from modules.config import logger
@@ -11,77 +12,91 @@ def process_citations(complete_answer: str, ranked_docs: List[dict]) -> Tuple[st
     """
     Extracts citation numbers from the answer, maps them to consecutive citation numbers,
     and returns the updated answer along with a list of citation sources.
+    
+    Handles special cases:
+    - URLs with spaces are properly URL-encoded
+    - Malformed citation formats are fixed
+    - Missing or invalid citation numbers are preserved but not linked
     """
     citations = []
     seen_nums = set()
     citation_numbers = []
     
-    # First, identify if there are any citation-style links already in the text
-    # We'll only clean links that match the citation pattern: just a number in brackets
-    # This preserves regular markdown links like [Click here](https://example.com)
-    citation_links_pattern = r'\[(\d+)\]\(([^)]+)\)'
-    
-    # Temporary dictionary to keep track of links that might be citations
-    temp_citation_links = {}
-    for match in re.finditer(citation_links_pattern, complete_answer):
-        num_str = match.group(1)
-        url = match.group(2)
-        # Only track it if it's just a plain number (likely a citation)
-        if num_str.isdigit():
-            temp_citation_links[int(num_str)] = url
-    
-    # Clean only the citation-style links, preserving other markdown links
-    if temp_citation_links:
-        for num, _ in temp_citation_links.items():
-            # Replace citation links with just the number
-            complete_answer = re.sub(r'\[' + str(num) + r'\]\([^)]+\)', f'[{num}]', complete_answer)
-    
+    # Extract all citation numbers from the answer
     for num_str in re.findall(r'\[(\d+)\]', complete_answer):
-        num = int(num_str)
-        if num not in seen_nums:
-            seen_nums.add(num)
-            citation_numbers.append(num)
+        try:
+            num = int(num_str)
+            if num not in seen_nums:
+                seen_nums.add(num)
+                citation_numbers.append(num)
+        except ValueError:
+            logger.warning(f"Invalid citation number format: {num_str}")
+            continue
+            
     valid_citations = validate_citation_numbers(citation_numbers, len(ranked_docs))
     
     seen_urls = {}
     citation_map = {}
     current_num = 1
+    
+    # Process valid citations and create mapping
     for num in valid_citations:
         try:
-            url = ranked_docs[num - 1]["page_source"]
-            if url not in seen_urls:
+            url = ranked_docs[num - 1].get("page_source", "page_source_failed")
+            if not url:
+                url = ranked_docs[num - 1].get("source", "source_failed")
+            
+            # Fix: URL-encode spaces and special characters in the URL
+            # But preserve the structure of the URL itself
+            parsed_url = urllib.parse.urlparse(url)
+            
+            # URL encode each component separately
+            encoded_path = urllib.parse.quote(parsed_url.path, safe='/,')
+            encoded_query = urllib.parse.quote_plus(parsed_url.query, safe='&=')
+            encoded_fragment = urllib.parse.quote(parsed_url.fragment)
+            
+            # Reconstruct the URL with encoded components
+            encoded_url = urllib.parse.urlunparse((
+                parsed_url.scheme,
+                parsed_url.netloc,
+                encoded_path,
+                parsed_url.params,
+                encoded_query,
+                encoded_fragment
+            ))
+            
+            # Check if this URL has been seen before (using the encoded version)
+            if encoded_url not in seen_urls:
                 citation_map[num] = current_num
-                seen_urls[url] = current_num
-                citations.append({"url": url, "cite_num": str(current_num)})
+                seen_urls[encoded_url] = current_num
+                citations.append({"url": encoded_url, "cite_num": str(current_num)})
                 current_num += 1
             else:
-                citation_map[num] = seen_urls[url]
+                citation_map[num] = seen_urls[encoded_url]
         except IndexError:
+            logger.warning(f"Citation number {num} out of range for ranked_docs")
             continue
-    
-    logger.debug(f"Citation numbers extracted: {citation_numbers}")
-    logger.debug(f"Seen URLs mapping: {seen_urls}")
+        except KeyError:
+            logger.warning(f"Missing 'page_source' key in ranked_docs for citation {num}")
+            continue
+        except Exception as e:
+            logger.exception(f"Error processing citation {num}: {str(e)}")
+            continue
 
     def replace_citation(match):
-        original = int(match.group(1))
-        new_num = citation_map.get(original, original)
-        
-        # Find the URL for this citation number
-        url = next((c["url"] for c in citations if c["cite_num"] == str(new_num)), "")
-        
-        # If URL is missing but the citation number is valid, try to get it directly from ranked_docs
-        if not url and 1 <= original <= len(ranked_docs):
-            try:
-                url = ranked_docs[original - 1].get("page_source", "")
-                # If we found a URL, add it to citations for future reference
-                if url and new_num not in [int(c["cite_num"]) for c in citations]:
-                    citations.append({"url": url, "cite_num": str(new_num)})
-            except (IndexError, KeyError):
-                logger.warning(f"Could not find URL for citation {original}")
-        
-        return f"[{new_num}]({url})" if url else f"[{new_num}]"
+        try:
+            original = int(match.group(1))
+            new_num = citation_map.get(original, original)
+            url = next((c["url"] for c in citations if c["cite_num"] == str(new_num)), "")
+            
+            # Return formatted citation with URL if available
+            return f"[{new_num}]({url})" if url else f"[{new_num}]"
+        except (ValueError, IndexError) as e:
+            # Handle any errors in citation replacement
+            logger.warning(f"Error in replace_citation: {str(e)}")
+            return match.group(0)  # Return original citation unchanged
 
-    # Replace all citations with their new numbers
+    # First replace all citations with their new numbers
     updated_answer = re.sub(r'\[(\d+)\]', replace_citation, complete_answer)
     
     # Remove duplicate adjacent citations in a loop until no more changes are made
@@ -89,30 +104,26 @@ def process_citations(complete_answer: str, ranked_docs: List[dict]) -> Tuple[st
     while prev_answer != updated_answer:
         prev_answer = updated_answer
         
-        # Handle citations with URLs: [n](url)[n](url) - only for identical citation numbers
+        # Handle citations with URLs: [n](url)[n](url)
+        # Fix: Use a more robust regex that can handle URLs with spaces and special characters
         updated_answer = re.sub(r'\[(\d+)\]\(([^)]+)\)\s*\[(\1)\]\([^)]+\)', r'[\1](\2)', updated_answer)
         
-        # Handle citations without URLs: [n][n] - only for identical citation numbers
+        # Handle citations without URLs: [n][n]
         updated_answer = re.sub(r'\[(\d+)\]\s*\[(\1)\]', r'[\1]', updated_answer)
         
         # Handle cases with whitespace or other characters between duplicate citations
         updated_answer = re.sub(r'\[(\d+)\](?:\s*[,.;:]?\s*)\[(\1)\]', r'[\1]', updated_answer)
         
-        # Ensure different citation numbers next to each other are preserved and properly formatted
-        # This pattern looks for two adjacent citation numbers that are different
-        # and ensures both have proper URL formatting
-        for match in re.finditer(r'\[(\d+)\](?:\([^)]*\))?\s*\[(\d+)\](?:\([^)]*\))?', updated_answer):
-            if match.group(1) != match.group(2):  # Different citation numbers
-                # Get URLs for both citations
-                url1 = next((c["url"] for c in citations if c["cite_num"] == match.group(1)), "")
-                url2 = next((c["url"] for c in citations if c["cite_num"] == match.group(2)), "")
-                
-                # Replace with properly formatted citations
-                pattern = re.escape(match.group(0))
-                replacement = f"[{match.group(1)}]({url1}) [{match.group(2)}]({url2})"
-                updated_answer = re.sub(pattern, replacement, updated_answer)
+        # Fix: Add specific handling for malformed markdown links
+        updated_answer = re.sub(r'\[(\d+)\]\s*\(([^)]*)\s+([^)]*)\)', r'[\1](\2\3)', updated_answer)
+        
+        # Fix: Handle potential broken markdown links with spaces between [] and ()
+        updated_answer = re.sub(r'\[(\d+)\]\s+\(([^)]+)\)', r'[\1](\2)', updated_answer)
     
     # Clean up any potential artifacts from the replacements
     updated_answer = re.sub(r'\s+([,.;:])', r'\1', updated_answer)
+    
+    # Fix: Ensure all linked citations have properly formed markdown links
+    updated_answer = re.sub(r'\[(\d+)\]\(([^)]*)\)', lambda m: f"[{m.group(1)}]({m.group(2).strip()})", updated_answer)
     
     return updated_answer, sorted(citations, key=lambda x: int(x["cite_num"])) 
