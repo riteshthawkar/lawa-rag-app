@@ -15,6 +15,27 @@ def process_citations(complete_answer: str, ranked_docs: List[dict]) -> Tuple[st
     citations = []
     seen_nums = set()
     citation_numbers = []
+    
+    # First, identify if there are any citation-style links already in the text
+    # We'll only clean links that match the citation pattern: just a number in brackets
+    # This preserves regular markdown links like [Click here](https://example.com)
+    citation_links_pattern = r'\[(\d+)\]\(([^)]+)\)'
+    
+    # Temporary dictionary to keep track of links that might be citations
+    temp_citation_links = {}
+    for match in re.finditer(citation_links_pattern, complete_answer):
+        num_str = match.group(1)
+        url = match.group(2)
+        # Only track it if it's just a plain number (likely a citation)
+        if num_str.isdigit():
+            temp_citation_links[int(num_str)] = url
+    
+    # Clean only the citation-style links, preserving other markdown links
+    if temp_citation_links:
+        for num, _ in temp_citation_links.items():
+            # Replace citation links with just the number
+            complete_answer = re.sub(r'\[' + str(num) + r'\]\([^)]+\)', f'[{num}]', complete_answer)
+    
     for num_str in re.findall(r'\[(\d+)\]', complete_answer):
         num = int(num_str)
         if num not in seen_nums:
@@ -47,7 +68,7 @@ def process_citations(complete_answer: str, ranked_docs: List[dict]) -> Tuple[st
         url = next((c["url"] for c in citations if c["cite_num"] == str(new_num)), "")
         return f"[{new_num}]({url})" if url else f"[{new_num}]"
 
-    # First replace all citations with their new numbers
+    # Replace all citations with their new numbers
     updated_answer = re.sub(r'\[(\d+)\]', replace_citation, complete_answer)
     
     # Remove duplicate adjacent citations in a loop until no more changes are made

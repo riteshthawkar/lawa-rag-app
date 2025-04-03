@@ -1,7 +1,7 @@
 import asyncio
 import re
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -34,7 +34,9 @@ app.add_middleware(
 # ------------------------------------------------------------------------------
 # Initialize Pinecone retriever and client
 # ------------------------------------------------------------------------------
-retriever, pc = initialize_pinecone()
+@app.on_event("startup")
+async def startup_event():
+    app.state.retriever, app.state.pc = initialize_pinecone()
 
 # ------------------------------------------------------------------------------
 # WebSocket endpoint for chat functionality with improved error handling
@@ -47,8 +49,6 @@ async def websocket_endpoint(websocket: WebSocket):
         try:
             data = await asyncio.wait_for(websocket.receive_json(), timeout=30)
             chat_request = ChatRequest(**data)
-
-            print(data)
         except ValidationError as ve:
             logger.exception("Validation error:")
             await safe_send(websocket, {"response": "Invalid request format.", "sources": []})
@@ -105,7 +105,7 @@ async def websocket_endpoint(websocket: WebSocket):
         
         # Retrieve documents using the retriever
         try:
-            retrieved_docs = await asyncio.to_thread(retriever.invoke, query_for_retrieval)
+            retrieved_docs = await asyncio.to_thread(websocket.app.state.retriever.invoke, query_for_retrieval)
         except Exception as e:
             logger.exception("Document retrieval error:")
             await safe_send(websocket, {"response": "This question is out of my scope. Please try again with another question.", "sources": []})
@@ -123,7 +123,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Rerank the documents (fallback to original docs if reranking fails)
         try:
-            ranked_docs = await asyncio.to_thread(rerank_docs, query_for_retrieval, docs, pc)
+            ranked_docs = await asyncio.to_thread(rerank_docs, query_for_retrieval, docs, websocket.app.state.pc)
         except Exception as e:
             logger.exception("Reranking error:")
             ranked_docs = docs
@@ -220,7 +220,7 @@ async def websocket_endpoint(websocket: WebSocket):
 # HTTP endpoint for Telegram chat
 # ------------------------------------------------------------------------------
 @app.post("/telegram-chat")
-async def telegram_chat(chat_request: ChatRequest):
+async def telegram_chat(chat_request: ChatRequest, request: Request):
     # Extract the question and language from the validated request body.
     logger.info(f"Received telegram chat request: {chat_request}")
     
@@ -273,7 +273,7 @@ async def telegram_chat(chat_request: ChatRequest):
     
     # Retrieve documents using the retriever.
     try:
-        retrieved_docs = await asyncio.to_thread(retriever.invoke, query_for_retrieval)
+        retrieved_docs = await asyncio.to_thread(request.app.state.retriever.invoke, query_for_retrieval)
     except Exception as e:
         logger.exception("Document retrieval error:")
         return {
@@ -295,7 +295,7 @@ async def telegram_chat(chat_request: ChatRequest):
 
     # Rerank the documents (fallback to original docs if reranking fails)
     try:
-        ranked_docs = await asyncio.to_thread(rerank_docs, query_for_retrieval, docs, pc)
+        ranked_docs = await asyncio.to_thread(rerank_docs, query_for_retrieval, docs, request.app.state.pc)
     except Exception as e:
         logger.exception("Reranking error:")
         ranked_docs = docs

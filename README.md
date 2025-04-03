@@ -62,3 +62,59 @@ lawa-rag-agent/
 - **Clarification Requests**: Asks for more information when queries are ambiguous
 - **Citation Processing**: Extracts and formats citations from responses
 - **Fallback Search**: Uses Tavily search when Pinecone retrieval yields no results 
+
+# Load Testing with Locust
+
+This repository contains a load testing script using Locust to test the WebSocket chat endpoint.
+
+## Prerequisites
+
+Before running the load test, you need to install the required packages:
+
+```bash
+pip install locust websocket-client
+```
+
+## Running the Load Test
+
+1. Make sure your application server is running and accessible.
+
+2. Start the Locust web interface:
+
+```bash
+locust -f locustfile.py
+```
+
+3. Open your browser and navigate to `http://localhost:8089`
+
+4. Configure the test parameters:
+   - Host: Enter the URL of your application (e.g., `ws://localhost:8000` or `wss://your-domain.com`)
+   - Number of users: Set to 100 (or your desired number of concurrent users)
+   - Spawn rate: How quickly to spawn users (e.g., 10 users per second)
+
+5. Start the test by clicking "Start swarming"
+
+6. Monitor the results in real-time through the Locust web interface
+
+## Test Configuration
+
+The test simulates users asking random legal questions through the WebSocket chat endpoint. Each user:
+
+1. Connects to the WebSocket endpoint
+2. Sends a randomly selected question
+3. Receives streamed responses until completion
+4. Waits between 5-15 seconds before asking another question
+
+## Analyzing Results
+
+Locust provides detailed statistics including:
+- Response times (min, max, median, average)
+- Requests per second
+- Failure rates
+- Number of users
+
+Use these metrics to determine if your application can handle the target load of 100 concurrent users.
+
+## Customization
+
+You can modify the `sample_questions` list in the `ChatUser` class to use questions more specific to your application domain. 
