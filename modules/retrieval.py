@@ -1,6 +1,5 @@
 import asyncio
 import time
-import httpx
 import os
 from typing import List, Dict
 from pinecone import Pinecone
@@ -8,21 +7,23 @@ from pinecone_text.sparse import BM25Encoder
 from langchain_community.retrievers import PineconeHybridSearchRetriever
 from langchain_huggingface import HuggingFaceEmbeddings
 
-from modules.config import logger
+from modules.config import (
+    logger, PINECONE_INDEX_NAME, TOP_K_DOCS, RERANK_TOP_N, 
+    ALPHA_HYBRID, RERANK_MODEL, EMBEDDING_MODEL, MAX_RETRIES
+)
 
 # Initialize retrieval components
-MAX_RETRIES = 3
 
 def initialize_pinecone():
     """Initialize the Pinecone retriever with retries"""
     pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
     for attempt in range(MAX_RETRIES):
         try:
-            index = pc.Index("combined-vectorstore")
+            index = pc.Index(PINECONE_INDEX_NAME)
             bm25 = BM25Encoder().load("./combined_vectorstore.json")
             
             embed_model = HuggingFaceEmbeddings(
-                model_name="Snowflake/snowflake-arctic-embed-l-v2.0",
+                model_name=EMBEDDING_MODEL,
                 model_kwargs={"trust_remote_code": True}
             )
             
@@ -31,8 +32,8 @@ def initialize_pinecone():
                     embeddings=embed_model,
                     sparse_encoder=bm25,
                     index=index,
-                    top_k=40,  # Hardcoded as required
-                    alpha=0.6,  # Hardcoded as required
+                    top_k=TOP_K_DOCS,
+                    alpha=ALPHA_HYBRID,
                 ),
                 pc
             )
@@ -47,11 +48,11 @@ def rerank_docs(query: str, docs: List[dict], pc_client: Pinecone) -> List[dict]
     """Reranks documents using Pinecone reranking"""
     try:
         result = pc_client.inference.rerank(
-            model="cohere-rerank-3.5",
+            model=RERANK_MODEL,
             query=query,
             documents=docs,
             rank_fields=["chunk"],
-            top_n=20,
+            top_n=RERANK_TOP_N,
             return_documents=True
         )
         ranked_docs = [{
@@ -63,39 +64,3 @@ def rerank_docs(query: str, docs: List[dict], pc_client: Pinecone) -> List[dict]
     except Exception as e:
         logger.exception("Error in rerank_docs:")
         raise
-
-async def tavily_search(question: str) -> List[dict]:
-    """Fallback search using Tavily API"""
-    try:
-        # Get API key from environment
-        api_key = os.getenv("TAVILY_API_KEY")
-        url = "https://api.tavily.com/search"
-        payload = {
-            "query": question,
-            "search_depth": "advanced",
-            "topic": "general",
-            "max_results": 5,
-            "include_answer": False,
-            "include_raw_content": True,
-        }
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-        results = data.get("results", [])
-        result_docs = []
-        for result in results:
-            obj = {
-                "page_source": result.get("url", ""),
-                "chunk": result.get("raw_content", "")
-            }
-            result_docs.append(obj)
-        return result_docs
-    except Exception as e:
-        logger.exception("Error in tavily_search:")
-        # In production you might return an empty list or a fallback response.
-        return [] 

@@ -7,12 +7,18 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 # Import modules
-from modules.config import logger, validate_env_vars, system_prompt
+from modules.config import (
+    logger, validate_env_vars, system_prompt, 
+    ENABLE_CLARIFICATION, MAX_CLARIFICATION_ATTEMPTS,
+    MAIN_MODEL, FALLBACK_MODEL, MAX_COMPLETION_TOKENS,
+    MAIN_MODEL_TEMPERATURE, FALLBACK_MODEL_TEMPERATURE,
+    WEBSOCKET_TIMEOUT, CHUNK_BUFFER_SIZE, HOST, PORT, CORS_ORIGINS
+)
 from modules.schemas import ChatRequest, CitationSource
 from modules.utils import safe_send, format_query
 from modules.citations import process_citations
-from modules.retrieval import initialize_pinecone, rerank_docs, tavily_search
-from modules.query_rewriting import query_rewriting_agent, openai_client
+from modules.retrieval import initialize_pinecone, rerank_docs
+from modules.query_rewriting import query_rewriting_agent, openai_client, handle_clarification_response
 
 # ------------------------------------------------------------------------------
 # Initialize application and validate environment
@@ -25,7 +31,7 @@ validate_env_vars()
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,7 +53,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         # Receive and validate the request
         try:
-            data = await asyncio.wait_for(websocket.receive_json(), timeout=30)
+            data = await asyncio.wait_for(websocket.receive_json(), timeout=WEBSOCKET_TIMEOUT)
             chat_request = ChatRequest(**data)
         except ValidationError as ve:
             logger.exception("Validation error:")
@@ -128,6 +134,7 @@ async def websocket_endpoint(websocket: WebSocket):
             logger.exception("Reranking error:")
             ranked_docs = docs
 
+
         # Prepare the conversation messages
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(relevant_history)  # Use only the relevant history
@@ -140,10 +147,10 @@ async def websocket_endpoint(websocket: WebSocket):
         # Generate and stream the chat response
         try:
             completion = await openai_client.chat.completions.create(
-                model="chatgpt-4o-latest",
+                model=MAIN_MODEL,
                 messages=messages,
-                temperature=0,
-                max_completion_tokens=1024,
+                temperature=MAIN_MODEL_TEMPERATURE,
+                max_completion_tokens=MAX_COMPLETION_TOKENS,
                 stream=True
             )
             async for chunk in completion:
@@ -156,7 +163,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Remove inline citation markers from the streamed chunk before sending
                     cleaned_content = re.sub(r'\[\d+\]', '', delta_content)
                     chunk_buffer += cleaned_content
-                    if len(chunk_buffer) >= 1:
+                    if len(chunk_buffer) >= CHUNK_BUFFER_SIZE:
                         await safe_send(websocket, {"response": chunk_buffer})
                         chunk_buffer = ""
             if chunk_buffer:
@@ -166,34 +173,13 @@ async def websocket_endpoint(websocket: WebSocket):
             await safe_send(websocket, {"response": "Response generation failed. Please try again later.", "sources": []})
             return
 
-        # If the response indicates no answer available, perform fallback search and reattempt generation.
+        # If the response indicates no answer available, inform the user
         if not isResponseAvailable:
-            ranked_docs = await tavily_search(question)
-            messages[-1] = {"role": "user", "content": format_query(question, language, ranked_docs)}
-            try:
-                completion = await openai_client.chat.completions.create(
-                    model="gpt-4o-mini-2024-07-18",
-                    messages=messages,
-                    temperature=0.2,
-                    max_completion_tokens=1024,
-                    stream=True
-                )
-                async for chunk in completion:
-                    delta_content = chunk.choices[0].delta.content
-                    if delta_content:
-                        complete_answer += delta_content
-                        # Remove inline citation markers from the streamed chunk before sending
-                        cleaned_content = re.sub(r'\[\d+\]', '', delta_content)
-                        chunk_buffer += cleaned_content
-                        if len(chunk_buffer) >= 1:
-                            await safe_send(websocket, {"response": chunk_buffer})
-                            chunk_buffer = ""
-                if chunk_buffer:
-                    await safe_send(websocket, {"response": chunk_buffer})
-            except Exception as e:
-                logger.exception("Error during fallback streaming:")
-                await safe_send(websocket, {"response": "Fallback response generation failed.", "sources": []})
-                return
+            await safe_send(websocket, {
+                "response": "I apologize, but I don't have sufficient information in my knowledge base to provide a complete answer to your question. Please try rephrasing your question or providing more specific details about what you're looking for.",
+                "sources": []
+            })
+            return
 
         # Process and map citations in the final answer
         try:
@@ -311,10 +297,10 @@ async def telegram_chat(chat_request: ChatRequest, request: Request):
     # Generate and stream the chat response.
     try:
         completion = await openai_client.chat.completions.create(
-            model="gpt-4o",
+            model=MAIN_MODEL,
             messages=messages,
-            temperature=0,
-            max_completion_tokens=1024,
+            temperature=MAIN_MODEL_TEMPERATURE,
+            max_completion_tokens=MAX_COMPLETION_TOKENS,
             stream=True
         )
         async for chunk in completion:
@@ -333,29 +319,12 @@ async def telegram_chat(chat_request: ChatRequest, request: Request):
             "sources": []
         }
 
-    # If the initial response indicates no answer, perform a fallback search.
+    # If the initial response indicates no answer, inform the user
     if not isResponseAvailable:
-        ranked_docs = await tavily_search(question)
-        messages[-1] = {"role": "user", "content": format_query(question, language, ranked_docs)}
-        try:
-            completion = await openai_client.chat.completions.create(
-                model="gpt-4o-mini-2024-07-18",
-                messages=messages,
-                temperature=0.2,
-                max_completion_tokens=1024,
-                stream=True
-            )
-            async for chunk in completion:
-                delta_content = chunk.choices[0].delta.content
-                if delta_content:
-                    complete_answer += delta_content
-                    cleaned_content = re.sub(r'\[\d+\]', '', delta_content)
-        except Exception as e:
-            logger.exception("Error during fallback streaming:")
-            return {
-                "response": "Fallback response generation failed.",
-                "sources": []
-            }
+        return {
+            "response": "I apologize, but I don't have sufficient information in my knowledge base to provide a complete answer to your question. Please try rephrasing your question or providing more specific details about what you're looking for.",
+            "sources": []
+        }
 
     # Process and map citations in the final answer.
     try:
@@ -376,3 +345,33 @@ async def root():
 @app.get("/health")
 async def health():
     return JSONResponse(content={"message": "working"})
+
+# ------------------------------------------------------------------------------
+# Clarification response endpoint
+# ------------------------------------------------------------------------------
+@app.post("/clarification-response")
+async def handle_clarification_response_endpoint(request: Request):
+    """Handle user's response to a clarification request"""
+    try:
+        data = await request.json()
+        original_query = data.get("original_query")
+        clarification_response = data.get("clarification_response")
+        language = data.get("language", "English")
+        
+        if not original_query or not clarification_response:
+            return JSONResponse(
+                content={"error": "Missing required fields: original_query and clarification_response"},
+                status_code=400
+            )
+        
+        # Handle the clarification response
+        result = await handle_clarification_response(original_query, clarification_response, language)
+        
+        return JSONResponse(content=result)
+        
+    except Exception as e:
+        logger.exception("Error handling clarification response:")
+        return JSONResponse(
+            content={"error": "Failed to process clarification response"},
+            status_code=500
+        )

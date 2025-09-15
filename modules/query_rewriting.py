@@ -2,7 +2,7 @@ import json
 import os
 from typing import List, Dict
 from openai import AsyncOpenAI
-from modules.config import logger
+from modules.config import logger, QUERY_REWRITING_TEMPERATURE, QUERY_REWRITING_MODEL
 
 # Initialize OpenAI client
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -17,13 +17,16 @@ IMPORTANT: Take a BROAD PERSPECTIVE when judging relevance. Many seemingly perso
 - Questions about business, employment, or trade relate to Economic Development departments
 - Questions about housing, property, or visas relate to various government services
 
-IMPORTANT: Avoid excessive clarification requests. Only use the "clarify" action when absolutely necessary as repeated clarification requests may frustrate users. Whenever possible, interpret the query generously and rewrite it rather than asking for clarification.
+IMPORTANT: Be smart about clarification requests. Only ask for clarification when the query is genuinely ambiguous or too vague to provide a useful answer. Consider these scenarios:
+- Very broad queries like "visas" or "requirements" without context
+- Queries that could refer to multiple government services
+- Queries that lack specific details needed for a complete answer
 
 Your job is to examine user queries and determine the appropriate action:
 
-1. REWRITE: If the query is related to UAE government topics but could be improved for better retrieval.
-2. RESPOND: If the query is clearly out of scope or a general greeting/small talk.
-3. CLARIFY: If the query is potentially relevant but lacks sufficient context to provide a good answer.
+1. REWRITE: If the query is related to UAE government topics and can be improved for better retrieval.
+2. RESPOND: If the query is clearly out of scope, a general greeting/small talk, or if you can provide a direct answer.
+3. CLARIFY: If the query is potentially relevant but too vague or ambiguous to provide a good answer.
 4. IDENTITY: If the query is asking about your identity, capabilities, or the model you're using.
 
 UAE government topics include:
@@ -100,9 +103,8 @@ Analysis: {
 Example 5 - Clarification Request:
 User query: "What are the requirements?"
 Analysis: {
-  "action": "rewrite",
-  "rewritten_query": "What are the requirements for UAE government services?",
-  "relevant_history_indices": []
+  "action": "clarify",
+  "response": "I'd be happy to help you with requirements information! Could you please specify which type of requirements you're interested in? For example:\n- Visa requirements for visiting UAE\n- Business license requirements\n- Employment requirements\n- Property ownership requirements\n- Or any other specific government service requirements?"
 }
 
 Example 6 - Filtering Irrelevant History:
@@ -157,6 +159,20 @@ Analysis: {
   "relevant_history_indices": []
 }
 
+Example 11 - Ambiguous Query Clarification:
+User query: "visas"
+Analysis: {
+  "action": "clarify",
+  "response": "I can help you with visa information! Could you please specify what type of visa you're interested in?\n\n- Tourist visas for visiting UAE\n- Work visas for employment\n- Student visas for education\n- Business visas for commercial activities\n- Transit visas for short stays\n- Or any other specific visa type?"
+}
+
+Example 12 - Vague Service Query:
+User query: "How do I apply?"
+Analysis: {
+  "action": "clarify",
+  "response": "I'd be happy to help you with the application process! Could you please specify what you'd like to apply for?\n\n- UAE visa application\n- Business license application\n- Government service application\n- Employment application\n- Property registration\n- Or any other specific application process?"
+}
+
 User query: {{query}}
 Language: {{language}}
 Previous messages: {{message_history}}
@@ -185,12 +201,12 @@ async def query_rewriting_agent(question: str, language: str, message_history: L
     try:
         # Call the LLM to analyze the query
         completion = await openai_client.chat.completions.create(
-            model="gpt-4o-mini-2024-07-18",  # Using a smaller model for efficiency
+            model=QUERY_REWRITING_MODEL,
             messages=[
                 {"role": "system", "content": agent_prompt},
                 {"role": "user", "content": "Analyze this query and determine the action to take. Provide your analysis in JSON format."}
             ],
-            temperature=0.1,
+            temperature=QUERY_REWRITING_TEMPERATURE,
             response_format={"type": "json_object"},
         )
         
@@ -215,7 +231,7 @@ async def query_rewriting_agent(question: str, language: str, message_history: L
         elif action == "clarify":
             return {
                 "action": "clarify",
-                "response": result.get("clarify_question", "Could you provide more specific details about your question? This would help me provide more accurate information about UAE government topics.")
+                "response": result.get("response", "Could you provide more specific details about your question? This would help me provide more accurate information about UAE government topics.")
             }
         elif action == "identity":
             return {
@@ -252,15 +268,95 @@ Expanded query (include the original query plus key domain terms):"""
     
     try:
         completion = await openai_client.chat.completions.create(
-            model="gpt-4o-mini-2024-07-18",
+            model=QUERY_REWRITING_MODEL,
             messages=[
                 {"role": "system", "content": expansion_prompt.format(query=query)}
             ],
-            temperature=0.1,
+            temperature=QUERY_REWRITING_TEMPERATURE,
             max_tokens=500
         )
         expanded_query = completion.choices[0].message.content.strip()
         return expanded_query
     except Exception as e:
         logger.exception("Error expanding query with domain knowledge:")
-        return query  # Return original query if expansion fails 
+        return query  # Return original query if expansion fails
+
+async def handle_clarification_response(original_query: str, clarification_response: str, 
+                                     language: str = "English") -> dict:
+    """
+    Handle user's response to a clarification request and create an enhanced query.
+    
+    Args:
+        original_query: The user's original question
+        clarification_response: User's response to clarification
+        language: Language of the queries
+        
+    Returns:
+        Dictionary with enhanced query and action
+    """
+    try:
+        # Combine the original query with clarification response
+        combined_query = await combine_queries(original_query, clarification_response, language)
+        
+        # Expand the combined query with domain knowledge
+        enhanced_query = await expand_query_with_domain_knowledge(combined_query)
+        
+        return {
+            "action": "rewrite",
+            "rewritten_query": enhanced_query,
+            "relevant_history_indices": []
+        }
+        
+    except Exception as e:
+        logger.exception("Error handling clarification response:")
+        # Fallback to simple combination
+        return {
+            "action": "rewrite",
+            "rewritten_query": f"{original_query} {clarification_response}".strip(),
+            "relevant_history_indices": []
+        }
+
+async def combine_queries(original_query: str, clarification_response: str, 
+                         language: str = "English") -> str:
+    """
+    Intelligently combine original query with clarification response.
+    
+    Args:
+        original_query: User's original question
+        clarification_response: User's response to clarification
+        language: Language of the queries
+        
+    Returns:
+        Enhanced combined query
+    """
+    try:
+        combination_prompt = f"""You are an expert at combining user queries for better information retrieval.
+
+**Original Query:** {original_query}
+**Clarification Response:** {clarification_response}
+**Language:** {language}
+
+Create an enhanced, specific query that incorporates both the original question and the clarification details.
+The combined query should:
+- Include all relevant details from both queries
+- Be specific and searchable
+- Maintain the original intent
+- Add necessary context for better retrieval
+
+Enhanced query:"""
+
+        completion = await openai_client.chat.completions.create(
+            model=QUERY_REWRITING_MODEL,
+            messages=[
+                {"role": "system", "content": combination_prompt}
+            ],
+            temperature=QUERY_REWRITING_TEMPERATURE,
+            max_tokens=300
+        )
+        
+        return completion.choices[0].message.content.strip()
+        
+    except Exception as e:
+        logger.exception("Error combining queries:")
+        # Simple fallback combination
+        return f"{original_query} {clarification_response}".strip()
