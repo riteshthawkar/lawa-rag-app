@@ -20,11 +20,11 @@ def initialize_pinecone():
     for attempt in range(MAX_RETRIES):
         try:
             index = pc.Index(PINECONE_INDEX_NAME)
-            bm25 = BM25Encoder().load("./combined_vectorstore.json")
+            bm25 = BM25Encoder().load("./LAWA_COMBINED_BM25_ENCODER.json")
             
             embed_model = HuggingFaceEmbeddings(
                 model_name=EMBEDDING_MODEL,
-                model_kwargs={"trust_remote_code": True}
+                model_kwargs={"trust_remote_code": True, "token": os.getenv("HF_TOKEN", "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")},
             )
             
             return (
