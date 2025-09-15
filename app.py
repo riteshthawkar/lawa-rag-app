@@ -1,3 +1,7 @@
+import nltk
+nltk.download("punkt")
+
+
 import asyncio
 import re
 
