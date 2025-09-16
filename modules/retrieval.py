@@ -55,11 +55,21 @@ def rerank_docs(query: str, docs: List[dict], pc_client: Pinecone) -> List[dict]
             top_n=RERANK_TOP_N,
             return_documents=True
         )
-        ranked_docs = [{
-            "page_source": ele.document.page_source,
-            "chunk": ele.document.chunk,
-            "summary": ele.document.summary
-        } for ele in result.data]
+        
+        # Create a mapping of original docs by chunk content for source lookup
+        docs_by_chunk = {doc["chunk"]: doc for doc in docs}
+        
+        ranked_docs = []
+        for ele in result.data:
+            # Try to get the original document to preserve source
+            original_doc = docs_by_chunk.get(ele.document.chunk, {})
+            
+            ranked_docs.append({
+                "page_source": original_doc.get("page_source", ""),
+                "chunk": ele.document.chunk,
+                "summary": original_doc.get("summary", "")
+            })
+        
         return ranked_docs
     except Exception as e:
         logger.exception("Error in rerank_docs:")

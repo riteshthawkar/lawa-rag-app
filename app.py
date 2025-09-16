@@ -124,7 +124,7 @@ async def websocket_endpoint(websocket: WebSocket):
         docs = [{
             "summary": ele.metadata.get("summary", ""),
             "chunk": ele.page_content,
-            "page_source": ele.metadata.get("source", "")
+            "page_source": ele.metadata.get("page_source", ele.metadata.get("source", ""))
         } for ele in retrieved_docs]
 
         if not docs:

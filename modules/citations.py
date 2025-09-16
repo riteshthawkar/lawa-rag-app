@@ -43,8 +43,9 @@ def process_citations(complete_answer: str, ranked_docs: List[dict]) -> Tuple[st
     for num in valid_citations:
         try:
             url = ranked_docs[num - 1].get("page_source", "page_source_failed")
-            if not url:
+            if not url or url == "page_source_failed":
                 url = ranked_docs[num - 1].get("source", "source_failed")
+            
             
             # Fix: URL-encode spaces and special characters in the URL
             # But preserve the structure of the URL itself
