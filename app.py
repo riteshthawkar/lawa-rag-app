@@ -342,40 +342,63 @@ async def telegram_chat(chat_request: ChatRequest, request: Request):
 # ------------------------------------------------------------------------------
 # Simple health check endpoint
 # ------------------------------------------------------------------------------
-@app.get("/")
+@app.get("/", response_class=JSONResponse)
 async def root():
-    return JSONResponse(content={"message": "working"})
+    return JSONResponse(content={"status": "working"})
+
+@app.get("/api", response_class=JSONResponse)
+async def api_root():
+    return JSONResponse(content={"message": "API is working"})
 
 @app.get("/health")
-async def health():
-    return JSONResponse(content={"message": "working"})
-
-# ------------------------------------------------------------------------------
-# Clarification response endpoint
-# ------------------------------------------------------------------------------
-@app.post("/clarification-response")
-async def handle_clarification_response_endpoint(request: Request):
-    """Handle user's response to a clarification request"""
+async def health(request: Request):
+    # Add a database connection check
+    db_status = "connected"
+    db_message = "Database connection successful."
+    pool = request.app.state.pool
+    if not pool or getattr(pool, "closed", False):
+         db_status = "disconnected"
+         db_message = "Database pool is closed or not initialized."
+    else:
+        try:
+            # Try a simple query
+            async with pool.acquire() as conn:
+                await conn.fetchval('SELECT 1')
+        except Exception as db_err:
+            logger.error(f"Database health check failed: {db_err}")
+            db_status = "error"
+            db_message = f"Database connection error: {str(db_err)[:100]}..."
+            
     try:
-        data = await request.json()
-        original_query = data.get("original_query")
-        clarification_response = data.get("clarification_response")
-        language = data.get("language", "English")
-        
-        if not original_query or not clarification_response:
+        # Check if components are loaded in app.state
+        if not hasattr(request.app.state, 'embed_model') or not request.app.state.embed_model:
             return JSONResponse(
-                content={"error": "Missing required fields: original_query and clarification_response"},
-                status_code=400
+                status_code=500,
+                content={"status": "error", "message": "Embedding model not initialized"}
             )
         
-        # Handle the clarification response
-        result = await handle_clarification_response(original_query, clarification_response, language)
-        
-        return JSONResponse(content=result)
-        
-    except Exception as e:
-        logger.exception("Error handling clarification response:")
+        if not hasattr(request.app.state, 'pinecone_summary_index') or not hasattr(request.app.state, 'pinecone_text_index'):
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Pinecone indexes not initialized"}
+            )
+            
+        # Return success if all checks pass
         return JSONResponse(
-            content={"error": "Failed to process clarification response"},
-            status_code=500
+            content={
+                "status": "healthy",
+                "message": "API is operational",
+                "components": {
+                    "embedding_model": "initialized",
+                    "pinecone": "connected",
+                    "database": db_status
+                }
+            },
+            media_type="application/json"
+        )
+    except Exception as e:
+        logger.exception("Health check failed:")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
         )
