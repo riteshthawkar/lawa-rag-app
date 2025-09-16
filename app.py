@@ -351,54 +351,5 @@ async def api_root():
     return JSONResponse(content={"message": "API is working"})
 
 @app.get("/health")
-async def health(request: Request):
-    # Add a database connection check
-    db_status = "connected"
-    db_message = "Database connection successful."
-    pool = request.app.state.pool
-    if not pool or getattr(pool, "closed", False):
-         db_status = "disconnected"
-         db_message = "Database pool is closed or not initialized."
-    else:
-        try:
-            # Try a simple query
-            async with pool.acquire() as conn:
-                await conn.fetchval('SELECT 1')
-        except Exception as db_err:
-            logger.error(f"Database health check failed: {db_err}")
-            db_status = "error"
-            db_message = f"Database connection error: {str(db_err)[:100]}..."
-            
-    try:
-        # Check if components are loaded in app.state
-        if not hasattr(request.app.state, 'embed_model') or not request.app.state.embed_model:
-            return JSONResponse(
-                status_code=500,
-                content={"status": "error", "message": "Embedding model not initialized"}
-            )
-        
-        if not hasattr(request.app.state, 'pinecone_summary_index') or not hasattr(request.app.state, 'pinecone_text_index'):
-            return JSONResponse(
-                status_code=500,
-                content={"status": "error", "message": "Pinecone indexes not initialized"}
-            )
-            
-        # Return success if all checks pass
-        return JSONResponse(
-            content={
-                "status": "healthy",
-                "message": "API is operational",
-                "components": {
-                    "embedding_model": "initialized",
-                    "pinecone": "connected",
-                    "database": db_status
-                }
-            },
-            media_type="application/json"
-        )
-    except Exception as e:
-        logger.exception("Health check failed:")
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
+async def health():
+    return JSONResponse(content={"message": "working"})
