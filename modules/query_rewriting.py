@@ -24,10 +24,17 @@ IMPORTANT: Be smart about clarification requests. Only ask for clarification whe
 
 Your job is to examine user queries and determine the appropriate action:
 
-1. REWRITE: If the query is related to UAE government topics and can be improved for better retrieval.
-2. RESPOND: If the query is clearly out of scope, a general greeting/small talk, or if you can provide a direct answer.
+1. REWRITE: If the query is related to UAE government topics and can be improved for better retrieval. **ALWAYS use REWRITE for queries about UAE government services, programs, laws, regulations, or official matters - even if you think you know the answer. The system will retrieve authoritative information from the knowledge base.**
+2. RESPOND: **ONLY** if the query is clearly out of scope, a general greeting/small talk, or a simple factual question you can answer directly (like "What is the capital of UAE?"). **NEVER use RESPOND for queries that require detailed information about government services, programs, or procedures.**
 3. CLARIFY: If the query is potentially relevant but too vague or ambiguous to provide a good answer.
 4. IDENTITY: If the query is asking about your identity, capabilities, or the model you're using.
+
+**CRITICAL RULES:**
+- **NEVER return intermediate/acknowledgment responses** like "I will provide information..." or "Please hold on while I gather details..."
+- **NEVER use RESPOND for queries about government services, programs, financial assistance, visas, business licenses, etc.** - these MUST use REWRITE to retrieve authoritative information
+- **RESPOND actions must contain a COMPLETE final answer**, not a promise to provide information later
+- If you're unsure whether to use REWRITE or RESPOND, **ALWAYS choose REWRITE** to ensure authoritative information is retrieved
+
 Also classify the query into one of the following types:
 {{query_types_prompt}}
 
@@ -178,6 +185,16 @@ Analysis: {
   "response": "I'd be happy to help you with the application process! Could you please specify what you'd like to apply for?\n\n- UAE visa application\n- Business license application\n- Government service application\n- Employment application\n- Property registration\n- Or any other specific application process?"
 }
 
+Example 13 - Government Service Query (MUST use REWRITE, NOT RESPOND):
+User query: "What financial assistance programs are available for UAE nationals and residents in Abu Dhabi?"
+Analysis: {
+  "action": "rewrite",
+  "rewritten_query": "What financial assistance programs, social welfare schemes, and government support services are available for UAE nationals and residents in Abu Dhabi?",
+  "query_type": "Specific Service",
+  "relevant_history_indices": []
+}
+NOTE: Even though this is a clear question about government services, you MUST use REWRITE to retrieve authoritative information from the knowledge base. NEVER use RESPOND with intermediate messages like "I will provide information..." or "Please hold on..."
+
 User query: {{query}}
 Language: {{language}}
 Previous messages: {{message_history}}
@@ -225,6 +242,31 @@ async def query_rewriting_agent(question: str, language: str, message_history: L
         # Extract the action and related information
         action = result.get("action", "rewrite")  # Default to rewrite if action is missing
         query_type = result.get("query_type", "General Information")
+        
+        # Validation: Check if RESPOND action contains an intermediate/acknowledgment response
+        # If so, force REWRITE to ensure proper retrieval
+        if action == "respond":
+            response_text = result.get("response", "")
+            # Check for intermediate response patterns
+            intermediate_patterns = [
+                "i will provide",
+                "i'll provide",
+                "let me",
+                "please hold on",
+                "while i gather",
+                "while i search",
+                "gathering details",
+                "searching for",
+                "looking for information",
+                "will retrieve",
+                "will find",
+                "will get",
+            ]
+            response_lower = response_text.lower()
+            if any(pattern in response_lower for pattern in intermediate_patterns):
+                logger.warning(f"Query rewriting agent returned intermediate response for query: '{question}'. Forcing REWRITE action.")
+                # Force rewrite action instead
+                action = "rewrite"
         
         if action == "rewrite":
             rewritten_query = result.get("rewritten_query", question)
