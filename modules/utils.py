@@ -5,10 +5,21 @@ from typing import List, Dict
 
 from modules.config import logger
 
-async def safe_send(websocket: WebSocket, message: dict):
+async def safe_send(websocket, message: dict):
     """Send messages safely over the websocket with proper error handling"""
     try:
+        # Check if websocket application state is connected
+        from starlette.websockets import WebSocketState
+        if websocket.client_state == WebSocketState.DISCONNECTED:
+             logger.warning("Attempted to send message to closed websocket.")
+             return
+
         await websocket.send_json(message)
+    except RuntimeError as e:
+        if "Cannot call \"send\" once a close message has been sent" in str(e):
+            logger.warning("WebSocket already closed when attempting to send message.")
+        else:
+            logger.error(f"RuntimeError in safe_send: {e}")
     except WebSocketDisconnect:
         logger.info("Client disconnected during send")
         raise

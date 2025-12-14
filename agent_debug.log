@@ -1,0 +1,240 @@
+
+DEBUG: WebSocket connected. chat_id: b3dc4fe5-bd65-4915-9536-d11e40cbf2ac
+DEBUG: Calling query_rewriting_agent with question: What is the capital of UAE?
+DEBUG: agent_result: {'action': 'respond', 'response': 'The capital of the UAE is Abu Dhabi. If you have any more questions about UAE or its government services, feel free to ask!'}
+DEBUG: Early return from query_rewriting_agent
+DEBUG: WebSocket connected. chat_id: None
+DEBUG: WebSocket connected. chat_id: None
+DEBUG: WebSocket connected. chat_id: None
+DEBUG: WebSocket connected. chat_id: None
+ERROR: Failed to create interaction: 400 - {"sources":["Not a valid string."]}
+DEBUG: WebSocket connected. chat_id: None
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 1207
+DEBUG: Checking persistence. chat_id: b0da02cf-ee76-4cc2-95f5-dd6db3d13a9d
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 
+DEBUG: Starting OpenAI stream...
+DEBUG: WebSocket connected. chat_id: 
+DEBUG: Starting OpenAI stream...
+DEBUG: WebSocket connected. chat_id: 
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2435
+DEBUG: Checking persistence. chat_id: c1ca0aa6-945a-4660-822e-57d92a1c3218
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: e793c045-38c9-4976-9643-6f6cd2759623
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 1441
+DEBUG: Checking persistence. chat_id: e793c045-38c9-4976-9643-6f6cd2759623
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 39d4a660-8866-450b-adc9-c98662fba664
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 1445
+DEBUG: Checking persistence. chat_id: 39d4a660-8866-450b-adc9-c98662fba664
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 5fcb39ce-601c-43b6-95c2-a80f1d79ced1
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2883
+DEBUG: Checking persistence. chat_id: 5fcb39ce-601c-43b6-95c2-a80f1d79ced1
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 3cd6b2a4-ec6a-4b02-9c3d-f78fee68a647
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2984
+DEBUG: Checking persistence. chat_id: 3cd6b2a4-ec6a-4b02-9c3d-f78fee68a647
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 6f39363d-0cd8-43a6-8cbb-244e4a11eeb3
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 1298
+DEBUG: Checking persistence. chat_id: 6f39363d-0cd8-43a6-8cbb-244e4a11eeb3
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: c28e5a48-1375-4713-80c6-c5d918fd2aed
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2887
+DEBUG: Checking persistence. chat_id: c28e5a48-1375-4713-80c6-c5d918fd2aed
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: efd4b975-da66-4ce3-9fab-f97398af87cb
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 3724
+DEBUG: Checking persistence. chat_id: efd4b975-da66-4ce3-9fab-f97398af87cb
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 0dc1f2aa-0556-408b-a159-75628c313daf
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 1382
+DEBUG: Checking persistence. chat_id: 0dc1f2aa-0556-408b-a159-75628c313daf
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 142231d3-6975-4ca6-b0ff-114b0ddb4be7
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 3359
+DEBUG: Checking persistence. chat_id: 142231d3-6975-4ca6-b0ff-114b0ddb4be7
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 90fa16ad-2faf-4525-91ae-3134d72a9af8
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 3148
+DEBUG: Checking persistence. chat_id: 90fa16ad-2faf-4525-91ae-3134d72a9af8
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 27d1fad3-4be2-4052-8401-f283988e04ac
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2525
+DEBUG: Checking persistence. chat_id: 27d1fad3-4be2-4052-8401-f283988e04ac
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 2c542f1d-af6b-4bab-976d-1798814df623
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2935
+DEBUG: Checking persistence. chat_id: 2c542f1d-af6b-4bab-976d-1798814df623
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 605762d9-dcaa-4362-81aa-d8a84ec9cc49
+DEBUG: WebSocket connected. chat_id: 0425dccd-ecc2-424c-ad2b-5fccf83362fc
+DEBUG: WebSocket connected. chat_id: 87384f60-7d26-488f-901f-c1e8a7790ab3
+DEBUG: WebSocket connected. chat_id: 486705e8-21bb-4eda-9bdf-6d5751123bb0
+DEBUG: WebSocket connected. chat_id: 399189a0-6de3-44b5-8cf6-0b346a5fdaf9
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 3215
+DEBUG: Checking persistence. chat_id: 399189a0-6de3-44b5-8cf6-0b346a5fdaf9
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 2c6e8046-8c4d-4c9f-a8e4-e6fcc721448a
+DEBUG: WebSocket connected. chat_id: 0b2d270c-36b5-4b07-ba31-e6bb66382e6b
+DEBUG: WebSocket connected. chat_id: d0a0f587-bca5-4cc3-a762-086ba7b7a7fa
+DEBUG: WebSocket connected. chat_id: eabbdab9-d8a9-477a-8edb-49147c93eef5
+DEBUG: WebSocket connected. chat_id: 5aa81dbf-0949-4d0d-9c42-f0a9508a46c4
+DEBUG: WebSocket connected. chat_id: d36c0e40-2cda-4c1d-a5aa-fa219fa81fab
+DEBUG: WebSocket connected. chat_id: c7061431-3d57-4b9b-a787-b0007ce57fa3
+DEBUG: WebSocket connected. chat_id: 600cf1aa-98ce-418a-96df-1c03ae6d0934
+DEBUG: WebSocket connected. chat_id: c044a237-7bf1-4885-ac85-1084ea5a4ad7
+DEBUG: WebSocket connected. chat_id: 90d94b5e-c065-4df2-9485-c7afeedf884a
+DEBUG: WebSocket connected. chat_id: 5212e5f5-521c-484b-8fd3-5981ddef072c
+DEBUG: WebSocket connected. chat_id: 429cda6c-36b3-4586-b96c-826f09e13375
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 3561
+DEBUG: Checking persistence. chat_id: 429cda6c-36b3-4586-b96c-826f09e13375
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: ba3e58d8-2119-4d7b-ab3b-7643f5d21a8c
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2870
+DEBUG: Checking persistence. chat_id: ba3e58d8-2119-4d7b-ab3b-7643f5d21a8c
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 8977ba73-cb5a-4403-9377-59b4ccdda1ef
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2922
+DEBUG: Checking persistence. chat_id: 8977ba73-cb5a-4403-9377-59b4ccdda1ef
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 32987c2a-dae7-4789-8ad8-b0ea32b2edf6
+DEBUG: WebSocket connected. chat_id: 810c29c1-3f37-44ba-b0b6-fe4f00c7ba05
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2912
+DEBUG: Checking persistence. chat_id: 810c29c1-3f37-44ba-b0b6-fe4f00c7ba05
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: af338aa0-4646-4f03-ba7f-985f4d0de5aa
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2635
+DEBUG: Checking persistence. chat_id: af338aa0-4646-4f03-ba7f-985f4d0de5aa
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 257b38d6-e157-4ea7-b68d-8744a84f8366
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2742
+DEBUG: Checking persistence. chat_id: 257b38d6-e157-4ea7-b68d-8744a84f8366
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 0b96a37c-d85a-423b-a2e6-f738f20e9dfe
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 3021
+DEBUG: Checking persistence. chat_id: 0b96a37c-d85a-423b-a2e6-f738f20e9dfe
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 395c983f-2ef7-473d-9fe9-eb46f99186e4
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 3034
+DEBUG: Checking persistence. chat_id: 395c983f-2ef7-473d-9fe9-eb46f99186e4
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: e0157112-4c27-437d-88ee-8b2a29497df5
+DEBUG: Starting OpenAI stream...
+DEBUG: WebSocket connected. chat_id: 67be08da-e0b0-4267-afdf-c10ce2885d65
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 3018
+DEBUG: Checking persistence. chat_id: 67be08da-e0b0-4267-afdf-c10ce2885d65
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 8f52d905-83e7-4110-bb2f-51ccc3df72c0
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2871
+DEBUG: Checking persistence. chat_id: 8f52d905-83e7-4110-bb2f-51ccc3df72c0
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 8f52d905-83e7-4110-bb2f-51ccc3df72c0
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 1354
+DEBUG: Checking persistence. chat_id: 8f52d905-83e7-4110-bb2f-51ccc3df72c0
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 5160a4e6-6a8c-45e7-b682-baf15224ca2f
+DEBUG: WebSocket connected. chat_id: 99f15b26-9dd4-43f0-9ffd-f138bc749897
+DEBUG: WebSocket connected. chat_id: 51c1efba-71fd-4adf-95f9-5e15dd3a0226
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 3334
+DEBUG: Checking persistence. chat_id: 51c1efba-71fd-4adf-95f9-5e15dd3a0226
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 449d2d28-fa24-4f47-9c3f-32debc076240
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2692
+DEBUG: Checking persistence. chat_id: 449d2d28-fa24-4f47-9c3f-32debc076240
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 6464caa4-4c2e-4dc6-a121-9ed6b9f60188
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 3397
+DEBUG: Checking persistence. chat_id: 6464caa4-4c2e-4dc6-a121-9ed6b9f60188
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: be97c65a-afd6-4e52-b399-a4d4a2834b26
+DEBUG: WebSocket connected. chat_id: 9a9f0187-9b7e-49c1-ac36-fbda44bec4c2
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2932
+DEBUG: Checking persistence. chat_id: 9a9f0187-9b7e-49c1-ac36-fbda44bec4c2
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 39b163df-2688-4315-86c3-2c28b79b6cb9
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2985
+DEBUG: Checking persistence. chat_id: 39b163df-2688-4315-86c3-2c28b79b6cb9
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 39b163df-2688-4315-86c3-2c28b79b6cb9
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 2601
+DEBUG: Checking persistence. chat_id: 39b163df-2688-4315-86c3-2c28b79b6cb9
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: a3442b40-3d08-468b-9f38-6447cb6b3d92
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 3048
+DEBUG: Checking persistence. chat_id: a3442b40-3d08-468b-9f38-6447cb6b3d92
+DEBUG: Calling save_interaction...
+DEBUG: WebSocket connected. chat_id: 089fda32-3fb5-4b07-ae10-4ce2b41332bd
+DEBUG: WebSocket connected. chat_id: fe6da46c-01c6-45c0-8847-a3d98e11ae50
+DEBUG: Starting OpenAI stream...
+DEBUG: Streaming finished. isResponseAvailable: True
+DEBUG: complete_answer length: 3572
+DEBUG: Checking persistence. chat_id: fe6da46c-01c6-45c0-8847-a3d98e11ae50
+DEBUG: Calling save_interaction...

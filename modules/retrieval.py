@@ -24,7 +24,7 @@ def initialize_pinecone():
             
             embed_model = HuggingFaceEmbeddings(
                 model_name=EMBEDDING_MODEL,
-                model_kwargs={"trust_remote_code": True, "token": os.getenv("HF_TOKEN", "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")},
+                model_kwargs={"trust_remote_code": True, "token": os.getenv("HF_TOKEN")},
             )
             
             return (

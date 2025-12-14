@@ -2,7 +2,7 @@ import json
 import os
 from typing import List, Dict
 from openai import AsyncOpenAI
-from modules.config import logger, QUERY_REWRITING_TEMPERATURE, QUERY_REWRITING_MODEL
+from modules.config import logger, QUERY_REWRITING_TEMPERATURE, QUERY_REWRITING_MODEL, QUERY_TYPES
 
 # Initialize OpenAI client
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -28,6 +28,10 @@ Your job is to examine user queries and determine the appropriate action:
 2. RESPOND: If the query is clearly out of scope, a general greeting/small talk, or if you can provide a direct answer.
 3. CLARIFY: If the query is potentially relevant but too vague or ambiguous to provide a good answer.
 4. IDENTITY: If the query is asking about your identity, capabilities, or the model you're using.
+Also classify the query into one of the following types:
+{{query_types_prompt}}
+
+If the query does not match any of the above types, classify it as 'Other' and specify the type, e.g., 'Other: greeting' or 'Other: nonsense'.
 
 UAE government topics include:
 - Government policies and regulations
@@ -55,11 +59,11 @@ IDENTITY questions include:
 - "What can you do?"
 - Any similar questions about your identity, capabilities, or underlying technology
 
-For REWRITE actions, reformulate the query to be more specific, include key terms, and incorporate context from previous messages if relevant.
-For RESPOND actions on out-of-scope queries, provide a message explaining the system's scope limitations.
+For REWRITE actions, reformulate the query to be more specific, include key terms, and incorporate context from previous messages if relevant. CRITICAL: If the input query is in a non-English language (e.g., Arabic), the `rewritten_query` MUST be translated into ENGLISH to ensure effective retrieval from the English knowledge base.
+For RESPOND actions on out-of-scope queries, provide a message explaining the system's scope limitations (in the user's language).
 For RESPOND actions on greetings, provide a friendly but brief response.
 For CLARIFY actions, suggest a specific follow-up question that would help provide better information.
-For IDENTITY actions, respond with: "I am an AI assistant developed by lawa.ai, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
+For IDENTITY actions, respond with: "I am an AI assistant developed by Lawa.ai, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
 
 IMPORTANT: The previous messages array contains alternating user and assistant messages. When analyzing the conversation history, focus primarily on the USER messages when deciding what's relevant to the current query. Return the indices of relevant USER messages only - we'll automatically include the corresponding assistant responses as needed.
 
@@ -70,6 +74,7 @@ User query: "Tell me about visas"
 Analysis: {
   "action": "rewrite",
   "rewritten_query": "What are the types of visas available in the UAE and their application requirements?",
+  "query_type": "General Information",
   "relevant_history_indices": []
 }
 
@@ -141,14 +146,14 @@ Example 8 - Identity Question:
 User query: "Who are you?"
 Analysis: {
   "action": "identity",
-  "response": "I am an AI assistant developed by `lawa.ai`, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
+  "response": "I am an AI assistant developed by Lawa.ai, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
 }
 
 Example 9 - Identity Question Variation:
 User query: "What model are you using?"
 Analysis: {
   "action": "identity",
-  "response": "I am an AI assistant developed by `lawa.ai`, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
+  "response": "I am an AI assistant developed by Lawa.ai, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
 }
 
 Example 10 - Animal Health Query:
@@ -193,10 +198,15 @@ async def query_rewriting_agent(question: str, language: str, message_history: L
     - rewritten_query: The improved query (if action is "rewrite")
     - response: Direct response (if action is "respond", "clarify", or "identity")
     - relevant_history_indices: Indices of relevant messages in history (if action is "rewrite")
+    - query_type: The classification of the query
     """
     # Format the prompt with the actual values
     formatted_history = json.dumps(message_history[-5:] if len(message_history) > 5 else message_history) if message_history else "[]"
-    agent_prompt = query_agent_prompt.replace("{{query}}", question).replace("{{language}}", language).replace("{{message_history}}", formatted_history)
+    
+    # Dynamically generate the query types section
+    query_types_str = "\n".join([f"- '{key}': {value}" for key, value in QUERY_TYPES.items()])
+    
+    agent_prompt = query_agent_prompt.replace("{{query}}", question).replace("{{language}}", language).replace("{{message_history}}", formatted_history).replace("{{query_types_prompt}}", query_types_str)
     
     try:
         # Call the LLM to analyze the query
@@ -214,36 +224,44 @@ async def query_rewriting_agent(question: str, language: str, message_history: L
         
         # Extract the action and related information
         action = result.get("action", "rewrite")  # Default to rewrite if action is missing
+        query_type = result.get("query_type", "General Information")
         
         if action == "rewrite":
             rewritten_query = result.get("rewritten_query", question)
-            expanded_query = await expand_query_with_domain_knowledge(rewritten_query)
+            expanded_queries = await expand_query_with_domain_knowledge(rewritten_query)
             return {
                 "action": "rewrite",
-                "rewritten_query": expanded_query,
-                "relevant_history_indices": result.get("relevant_history_indices", [])  # Get indices of relevant history messages
+                "rewritten_queries": expanded_queries,
+                "rewritten_query": expanded_queries[0] if expanded_queries else rewritten_query, # Fallback/Primary
+                "relevant_history_indices": result.get("relevant_history_indices", []),  # Get indices of relevant history messages
+                "query_type": query_type
             }
         elif action == "respond":
             return {
                 "action": "respond",
-                "response": result.get("response", "I can only answer questions related to UAE governance, laws, economy, tourism, or other official matters.")
+                "response": result.get("response", "I can only answer questions related to UAE governance, laws, economy, tourism, or other official matters."),
+                "query_type": query_type
             }
         elif action == "clarify":
             return {
                 "action": "clarify",
-                "response": result.get("response", "Could you provide more specific details about your question? This would help me provide more accurate information about UAE government topics.")
+                "response": result.get("response", "Could you provide more specific details about your question? This would help me provide more accurate information about UAE government topics."),
+                "query_type": "Clarification"
             }
         elif action == "identity":
             return {
                 "action": "respond",
-                "response": "I am an AI assistant developed by `lawa.ai`, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics."
+                "response": "I am an AI assistant developed by Lawa.ai, designed to provide accurate responses based on the provided context, strictly focused on UAE government topics.",
+                "query_type": "Identity"
             }
         else:
             # Fallback for unexpected actions
             return {
                 "action": "rewrite",
+                "rewritten_queries": [question],
                 "rewritten_query": question,
-                "relevant_history_indices": []
+                "relevant_history_indices": [],
+                "query_type": "Other"
             }
             
     except Exception as e:
@@ -251,20 +269,32 @@ async def query_rewriting_agent(question: str, language: str, message_history: L
         # On error, default to proceeding with the original query
         return {
             "action": "rewrite",
+            "rewritten_queries": [question],
             "rewritten_query": question,
-            "relevant_history_indices": []
+            "relevant_history_indices": [],
+            "query_type": "Error"
         }
 
-async def expand_query_with_domain_knowledge(query: str) -> str:
-    """Uses a smaller LLM to expand the query with domain-specific knowledge"""
-    expansion_prompt = """You are a UAE government domain expert.
-Given a user query related to UAE government topics, expand it with relevant 
-domain-specific terminology, entity names, and concepts to improve retrieval.
-Add only essential terms that would help find relevant documents.
+async def expand_query_with_domain_knowledge(query: str) -> List[str]:
+    """Uses a smaller LLM to expand the query into multiple diverse search queries"""
+    expansion_prompt = """You are a UAE government domain expert and search optimization specialist.
+Given a user query, generate 3 distinctly different search queries in ENGLISH to improve document retrieval (even if the input is in Arabic or another language).
+
+Strategies to use:
+1. Domain Expansion: Add specific UAE government entity names and terminology.
+2. Semantic Variation: Use synonyms and related concepts.
+3. Question Rewording: Rephrase the question from different angles.
 
 User query: {query}
 
-Expanded query (include the original query plus key domain terms):"""
+Output valid JSON ONLY in this format:
+{{
+    "queries": [
+        "expanded query 1 with domain terms",
+        "variation query 2",
+        "variation query 3"
+    ]
+}}"""
     
     try:
         completion = await openai_client.chat.completions.create(
@@ -273,13 +303,20 @@ Expanded query (include the original query plus key domain terms):"""
                 {"role": "system", "content": expansion_prompt.format(query=query)}
             ],
             temperature=QUERY_REWRITING_TEMPERATURE,
+            response_format={"type": "json_object"},
             max_tokens=500
         )
-        expanded_query = completion.choices[0].message.content.strip()
-        return expanded_query
+        result = json.loads(completion.choices[0].message.content)
+        queries = result.get("queries", [query])
+        
+        # Ensure distinct queries and include original if not present (though prompt asks for variations)
+        # It's often good to keep the original or a very close rewrite.
+        # But here we trust the LLM to give 3 good ones.
+        return queries[:3]
+        
     except Exception as e:
         logger.exception("Error expanding query with domain knowledge:")
-        return query  # Return original query if expansion fails
+        return [query]  # Return original query as a single-item list if expansion fails
 
 async def handle_clarification_response(original_query: str, clarification_response: str, 
                                      language: str = "English") -> dict:
@@ -299,21 +336,26 @@ async def handle_clarification_response(original_query: str, clarification_respo
         combined_query = await combine_queries(original_query, clarification_response, language)
         
         # Expand the combined query with domain knowledge
-        enhanced_query = await expand_query_with_domain_knowledge(combined_query)
+        enhanced_queries = await expand_query_with_domain_knowledge(combined_query)
         
         return {
             "action": "rewrite",
-            "rewritten_query": enhanced_query,
-            "relevant_history_indices": []
+            "rewritten_queries": enhanced_queries,
+            "rewritten_query": enhanced_queries[0] if enhanced_queries else combined_query,
+            "relevant_history_indices": [],
+            "query_type": "Follow-up"
         }
         
     except Exception as e:
         logger.exception("Error handling clarification response:")
         # Fallback to simple combination
+        combined_q = f"{original_query} {clarification_response}".strip()
         return {
             "action": "rewrite",
-            "rewritten_query": f"{original_query} {clarification_response}".strip(),
-            "relevant_history_indices": []
+            "rewritten_queries": [combined_q],
+            "rewritten_query": combined_q,
+            "relevant_history_indices": [],
+            "query_type": "Follow-up"
         }
 
 async def combine_queries(original_query: str, clarification_response: str, 

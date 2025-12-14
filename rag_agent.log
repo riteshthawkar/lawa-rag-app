@@ -1,0 +1,25 @@
+[nltk_data] Error loading punkt: <urlopen error [SSL:
+[nltk_data]     CERTIFICATE_VERIFY_FAILED] certificate verify failed:
+[nltk_data]     unable to get local issuer certificate (_ssl.c:1000)>
+INFO:     Started server process [40697]
+INFO:     Waiting for application startup.
+2025-11-20 00:19:06,738 - INFO - Use pytorch device_name: mps
+2025-11-20 00:19:06,738 - INFO - Load pretrained SentenceTransformer: google/embeddinggemma-300m
+2025-11-20 00:19:07,249 - WARNING - You try to use a model that was created with version 5.1.0, however, your version is 3.4.1. This might cause unexpected behavior or errors. In that case, try to update to the latest version.
+
+
+
+2025-11-20 00:19:12,992 - INFO - 14 prompts are loaded, with the keys: ['query', 'document', 'BitextMining', 'Clustering', 'Classification', 'InstructionRetrieval', 'MultilabelClassification', 'PairClassification', 'Reranking', 'Retrieval', 'Retrieval-query', 'Retrieval-document', 'STS', 'Summarization']
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+INFO:     ('127.0.0.1', 63628) - "WebSocket /chat?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzYzNTg3MTU3LCJpYXQiOjE3NjM1ODM1NTcsImp0aSI6IjRmM2Q3ZWZjODQ4YTRhZGU4NTNjMGE4Y2EwMmJhOTQwIiwidXNlcl9pZCI6MzR9.CRT_L3FiVwbCXFimbAHeF9uiOGLYuteOwP9UcaFq55c&chat_id=b3dc4fe5-bd65-4915-9536-d11e40cbf2ac" [accepted]
+2025-11-20 00:19:17,475 - INFO - WebSocket connected. chat_id: b3dc4fe5-bd65-4915-9536-d11e40cbf2ac, token: eyJhbGciOi
+INFO:     connection open
+2025-11-20 00:19:19,121 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     connection closed
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [40697]
+o be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
