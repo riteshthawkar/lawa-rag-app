@@ -25,7 +25,7 @@ def _require_live_configuration():
 def test_openai_models_are_reachable_live(env_name, default_model):
     _require_live_configuration()
 
-    api_key = _require_clean_env_value("OPENAI_API_KEY")
+    api_key = require_clean_env_value("OPENAI_API_KEY")
     if not api_key.startswith("sk-"):
         pytest.fail(
             "OPENAI_API_KEY does not look like a valid OpenAI API key. "
@@ -47,7 +47,7 @@ def test_openai_models_are_reachable_live(env_name, default_model):
 def test_pinecone_index_is_reachable_live():
     _require_live_configuration()
 
-    pinecone = Pinecone(api_key=_require_clean_env_value("PINECONE_API_KEY"))
-    index_name = _require_clean_env_value("PINECONE_INDEX_NAME")
+    pinecone = Pinecone(api_key=require_clean_env_value("PINECONE_API_KEY"))
+    index_name = require_clean_env_value("PINECONE_INDEX_NAME")
 
     assert pinecone.has_index(index_name) is True
