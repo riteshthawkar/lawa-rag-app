@@ -346,7 +346,7 @@ Output valid JSON ONLY in this format:
             ],
             temperature=QUERY_REWRITING_TEMPERATURE,
             response_format={"type": "json_object"},
-            max_tokens=500
+            max_completion_tokens=500
         )
         result = json.loads(completion.choices[0].message.content)
         queries = result.get("queries", [query])
@@ -435,7 +435,7 @@ Enhanced query:"""
                 {"role": "system", "content": combination_prompt}
             ],
             temperature=QUERY_REWRITING_TEMPERATURE,
-            max_tokens=300
+            max_completion_tokens=300
         )
         
         return completion.choices[0].message.content.strip()

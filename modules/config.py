@@ -58,9 +58,9 @@ def validate_env_vars():
         )
 
 # Model Configuration
-MAIN_MODEL = os.getenv("MAIN_MODEL", "gpt-4o-latest")
-QUERY_REWRITING_MODEL = os.getenv("QUERY_REWRITING_MODEL", "gpt-4o-mini-2024-07-18")
-FALLBACK_MODEL = os.getenv("FALLBACK_MODEL", "gpt-4o-mini-2024-07-18")
+MAIN_MODEL = os.getenv("MAIN_MODEL", "gpt-5.4")
+QUERY_REWRITING_MODEL = os.getenv("QUERY_REWRITING_MODEL", "gpt-5.4-mini")
+FALLBACK_MODEL = os.getenv("FALLBACK_MODEL", "gpt-5.4-mini")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "Snowflake/snowflake-arctic-embed-l-v2.0")
 
 # Retrieval Configuration
