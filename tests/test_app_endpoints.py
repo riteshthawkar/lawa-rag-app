@@ -229,6 +229,56 @@ def test_telegram_chat_returns_grounded_response(client, app_module, monkeypatch
     ]
 
 
+def test_telegram_chat_preserves_page_source_metadata(client, app_module, monkeypatch):
+    async def fake_query_rewriting_agent(*args, **kwargs):
+        return {
+            "action": "rewrite",
+            "rewritten_query": "UAE Golden Visa overview",
+            "query_type": "General Information",
+            "relevant_history_indices": [],
+        }
+
+    docs = [
+        type(
+            "Doc",
+            (),
+            {
+                "page_content": "The UAE Golden Visa is a long-term residence visa.",
+                "metadata": {
+                    "page_source": "https://example.com/page-source",
+                    "summary": "Golden Visa overview",
+                },
+            },
+        )()
+    ]
+
+    monkeypatch.setattr(app_module, "query_rewriting_agent", fake_query_rewriting_agent)
+    monkeypatch.setattr(client.app.state, "retriever", FakeRetriever(docs))
+    monkeypatch.setattr(
+        app_module,
+        "rerank_docs",
+        lambda *args, **kwargs: [
+            {
+                "page_source": "https://example.com/page-source",
+                "chunk": docs[0].page_content,
+                "summary": docs[0].metadata["summary"],
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        app_module,
+        "openai_client",
+        FakeOpenAIClient([FakeStream(["The UAE Golden Visa is a long-term residence visa [1]."])]),
+    )
+
+    response = client.post("/telegram-chat", json=_chat_payload())
+
+    assert response.status_code == 200
+    assert response.json()["sources"] == [
+        {"url": "https://example.com/page-source", "cite_num": "1"}
+    ]
+
+
 def test_telegram_chat_handles_direct_responses(client, app_module, monkeypatch):
     async def fake_query_rewriting_agent(*args, **kwargs):
         return {
