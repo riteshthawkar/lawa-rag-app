@@ -37,9 +37,12 @@ lawa-rag-agent/
 3. Set up environment variables by creating a `.env` file:
    ```
    PINECONE_API_KEY=your_pinecone_api_key
-   PERPLEXITY_API_KEY=your_perplexity_api_key
    OPENAI_API_KEY=your_openai_api_key
-   TAVILY_API_KEY=your_tavily_api_key
+   SECRET_KEY=your_backend_secret_key
+   PINECONE_INDEX_NAME=combined-vectorstore
+   BACKEND_URL=http://localhost:8000
+   SERVICE_NAME=lawa-rag
+   SERVICE_ENVIRONMENT=development
    ```
 
 4. Run the application:
@@ -51,7 +54,9 @@ lawa-rag-agent/
 
 - WebSocket: `/chat` - For real-time chat interactions
 - HTTP POST: `/telegram-chat` - For Telegram bot integration
-- HTTP GET: `/health` - Health check endpoint
+- HTTP GET: `/health` - Fast liveness and high-level readiness
+- HTTP GET: `/health/detailed` - Dependency and release metadata breakdown
+- HTTP GET: `/health/generation` - Synthetic end-to-end RAG generation probe
 
 ## Features
 

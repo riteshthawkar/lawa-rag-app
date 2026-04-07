@@ -1,11 +1,10 @@
 import importlib
 import os
-from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.fakes import FakeDocument, FakeRetriever
+from tests.fakes import FakeDocument, FakePineconeClient, FakeRetriever
 
 
 os.environ.setdefault("PINECONE_API_KEY", "test-pinecone-key")
@@ -38,7 +37,7 @@ def app_module(monkeypatch, sample_docs):
     monkeypatch.setattr(
         app_module,
         "initialize_pinecone",
-        lambda: (FakeRetriever(sample_docs), SimpleNamespace()),
+        lambda: (FakeRetriever(sample_docs), FakePineconeClient()),
     )
 
     return app_module

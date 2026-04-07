@@ -9,13 +9,42 @@ class FakeDocument:
 
 
 class FakeRetriever:
-    def __init__(self, docs):
+    def __init__(self, docs, embeddings=None):
         self.docs = list(docs)
         self.queries = []
+        self.embeddings = embeddings or SimpleNamespace(model_name="test-embedding-model")
 
     def invoke(self, query):
         self.queries.append(query)
         return list(self.docs)
+
+
+class FakePineconeIndex:
+    def __init__(self, stats=None):
+        self.stats = stats or {"namespaces": {"default": {"vector_count": 1}}}
+
+    def describe_index_stats(self):
+        return self.stats
+
+
+class FakePineconeInference:
+    def __init__(self):
+        self.calls = []
+
+    def rerank(self, **kwargs):
+        self.calls.append(kwargs)
+        return SimpleNamespace(data=[])
+
+
+class FakePineconeClient:
+    def __init__(self, stats=None):
+        self.stats = stats or {"namespaces": {"default": {"vector_count": 1}}}
+        self.index_requests = []
+        self.inference = FakePineconeInference()
+
+    def Index(self, name):
+        self.index_requests.append(name)
+        return FakePineconeIndex(self.stats)
 
 
 def make_completion(content):
@@ -59,6 +88,20 @@ class FakeChatCompletions:
         return response
 
 
+class FakeModelsAPI:
+    def __init__(self, failures=None):
+        self.failures = failures or {}
+        self.calls = []
+
+    async def retrieve(self, model):
+        self.calls.append(model)
+        result = self.failures.get(model)
+        if isinstance(result, Exception):
+            raise result
+        return result or SimpleNamespace(id=model)
+
+
 class FakeOpenAIClient:
-    def __init__(self, responses):
+    def __init__(self, responses, model_failures=None):
         self.chat = SimpleNamespace(completions=FakeChatCompletions(responses))
+        self.models = FakeModelsAPI(model_failures)

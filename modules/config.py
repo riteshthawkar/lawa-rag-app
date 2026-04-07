@@ -62,6 +62,10 @@ MAIN_MODEL = os.getenv("MAIN_MODEL", "gpt-5.4")
 QUERY_REWRITING_MODEL = os.getenv("QUERY_REWRITING_MODEL", "gpt-5.4-mini")
 FALLBACK_MODEL = os.getenv("FALLBACK_MODEL", "gpt-5.4-mini")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "Snowflake/snowflake-arctic-embed-l-v2.0")
+GENERATION_PROBE_QUESTION = os.getenv(
+    "GENERATION_PROBE_QUESTION",
+    "What is the UAE Golden Visa?",
+)
 
 # Retrieval Configuration
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "combined-vectorstore")
@@ -112,6 +116,23 @@ QUERY_TYPES = {
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8080"))
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+SERVICE_NAME = os.getenv("SERVICE_NAME", "lawa-rag")
+SERVICE_ENVIRONMENT = os.getenv(
+    "SERVICE_ENVIRONMENT",
+    os.getenv("ENVIRONMENT", "development"),
+)
+
+# Deployment and operations metadata
+RELEASE_VERSION = os.getenv("RELEASE_VERSION", "unknown")
+COMMIT_SHA = os.getenv("COMMIT_SHA", "unknown")
+DEPLOYED_AT = os.getenv("DEPLOYED_AT", "unknown")
+DEPLOYED_BY = os.getenv("DEPLOYED_BY", "unknown")
+RELEASE_NOTES_SUMMARY = os.getenv("RELEASE_NOTES_SUMMARY", "")
+SERVICE_OWNER = os.getenv("SERVICE_OWNER", "")
+RUNBOOK_URL = os.getenv("RUNBOOK_URL", "")
+DASHBOARD_SERVICE_ID = os.getenv("DASHBOARD_SERVICE_ID", "")
+PRIMARY_REPOSITORY_URL = os.getenv("PRIMARY_REPOSITORY_URL", "")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
 
 # Retry Configuration
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
