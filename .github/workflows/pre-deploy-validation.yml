@@ -30,7 +30,6 @@ jobs:
 
   live-provider-smoke:
     runs-on: ubuntu-latest
-    needs: unit-tests
     env:
       RUN_LIVE_PROVIDER_TESTS: "1"
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -71,11 +70,9 @@ jobs:
       - name: Run live OpenAI and Pinecone smoke tests
         run: pytest -m live tests/test_live_smoke.py --maxfail=1 --disable-warnings
 
-  local-live-app-regression:
+  local-live-semantic-regression:
     runs-on: ubuntu-latest
-    needs:
-      - unit-tests
-      - live-provider-smoke
+    needs: live-provider-smoke
     env:
       RUN_LIVE_PROVIDER_TESTS: "1"
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -136,14 +133,88 @@ jobs:
       - name: Run live semantic regression tests
         run: pytest -m live tests/test_live_semantic_regression.py --maxfail=1 --disable-warnings
 
-      - name: Run live websocket end-to-end test when configured
+      - name: Upload local app log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-live-semantic-app-log
+          path: app.log
+
+      - name: Stop app
+        if: always()
+        run: |
+          if [ -f app.pid ]; then
+            kill "$(cat app.pid)" || true
+          fi
+
+  local-live-websocket-e2e:
+    runs-on: ubuntu-latest
+    needs: live-provider-smoke
+    env:
+      RUN_LIVE_PROVIDER_TESTS: "1"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+      PINECONE_INDEX_NAME: ${{ vars.PINECONE_INDEX_NAME || secrets.PINECONE_INDEX_NAME }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      BACKEND_URL: ${{ vars.BACKEND_URL || secrets.BACKEND_URL }}
+      WEBSOCKET_TEST_TOKEN: ${{ secrets.WEBSOCKET_TEST_TOKEN }}
+      MAIN_MODEL: gpt-5.4
+      QUERY_REWRITING_MODEL: gpt-5.4-mini
+      FALLBACK_MODEL: gpt-5.4-mini
+      EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL || 'google/embeddinggemma-300m' }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HOST: 127.0.0.1
+      PORT: "18080"
+      LIVE_APP_BASE_URL: http://127.0.0.1:18080
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Validate required websocket secrets
+        run: |
+          missing=0
+          for var in OPENAI_API_KEY PINECONE_API_KEY PINECONE_INDEX_NAME SECRET_KEY BACKEND_URL WEBSOCKET_TEST_TOKEN; do
+            if [ -z "${!var}" ]; then
+              echo "::error::$var is required for live websocket end-to-end validation"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Start app locally
+        run: |
+          nohup python main.py > app.log 2>&1 &
+          echo $! > app.pid
+
+      - name: Wait for app readiness
+        run: |
+          python - <<'PY'
+          from tests.live_utils import wait_for_http_ready
+          wait_for_http_ready("http://127.0.0.1:18080", timeout_seconds=180)
+          PY
+
+      - name: Run live websocket end-to-end test
         run: pytest -m live tests/test_live_websocket_e2e.py --maxfail=1 --disable-warnings
 
       - name: Upload local app log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: local-live-app-log
+          name: local-live-websocket-app-log
           path: app.log
 
       - name: Stop app
