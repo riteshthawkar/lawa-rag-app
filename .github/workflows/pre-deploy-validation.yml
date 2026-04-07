@@ -195,13 +195,16 @@ jobs:
         run: |
           python3 - <<'PY'
           import os
+          from urllib.parse import urlsplit, urlunsplit
 
           raw_backend_url = os.environ["BACKEND_URL"].rstrip("/")
-          normalized_backend_url = (
-              raw_backend_url[:-4]
-              if raw_backend_url.endswith("/api")
-              else raw_backend_url
-          )
+          parsed = urlsplit(raw_backend_url)
+          path = parsed.path.rstrip("/")
+
+          if path == "/api" or path.startswith("/api/"):
+              normalized_backend_url = urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+          else:
+              normalized_backend_url = raw_backend_url
 
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as github_env:
               github_env.write(f"BACKEND_URL={normalized_backend_url}\n")
@@ -214,29 +217,49 @@ jobs:
           import os
           import sys
           import urllib.request
+          from urllib.parse import urlsplit, urlunsplit
 
           backend_url = os.environ["BACKEND_URL"].rstrip("/")
+          parsed = urlsplit(backend_url)
+          backend_origin = urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
           payload = json.dumps(
               {
                   "username": os.environ["DEMO_USER_EMAIL"],
                   "password": os.environ["DEMO_USER_PASSWORD"],
               }
           ).encode()
-          request = urllib.request.Request(
-              f"{backend_url}/api/token/",
-              data=payload,
-              headers={"Content-Type": "application/json"},
-              method="POST",
-          )
 
-          try:
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  body = json.loads(response.read().decode())
-          except Exception as exc:
-              print(
-                  f"::error::Failed to mint websocket test token from {backend_url}/api/token/: {exc}"
+          token_urls = []
+          for candidate in (
+              f"{backend_origin}/api/token/",
+              f"{backend_url}/api/token/",
+              f"{backend_url}/token/",
+          ):
+              if candidate not in token_urls:
+                  token_urls.append(candidate)
+
+          body = None
+          errors = []
+          for token_url in token_urls:
+              request = urllib.request.Request(
+                  token_url,
+                  data=payload,
+                  headers={"Content-Type": "application/json"},
+                  method="POST",
               )
-              raise
+
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      body = json.loads(response.read().decode())
+                      break
+              except Exception as exc:
+                  errors.append(f"{token_url}: {exc}")
+
+          if body is None:
+              print("::error::Failed to mint websocket test token from all candidate endpoints")
+              for error in errors:
+                  print(error)
+              sys.exit(1)
 
           access_token = body.get("access")
           if not access_token:
