@@ -35,8 +35,7 @@ jobs:
       RUN_LIVE_PROVIDER_TESTS: "1"
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
-      PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      PINECONE_INDEX_NAME: ${{ vars.PINECONE_INDEX_NAME || secrets.PINECONE_INDEX_NAME }}
       MAIN_MODEL: gpt-5.4
       QUERY_REWRITING_MODEL: gpt-5.4-mini
       FALLBACK_MODEL: gpt-5.4-mini
@@ -54,7 +53,7 @@ jobs:
       - name: Validate required secrets
         run: |
           missing=0
-          for var in OPENAI_API_KEY PINECONE_API_KEY PINECONE_INDEX_NAME SECRET_KEY; do
+          for var in OPENAI_API_KEY PINECONE_API_KEY PINECONE_INDEX_NAME; do
             if [ -z "${!var}" ]; then
               echo "::error::$var is required for live validation"
               missing=1
