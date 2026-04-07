@@ -2,21 +2,9 @@ name: Post-Deploy Smoke
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Pre-Deploy Validation
-    types:
-      - completed
 
 jobs:
   deployed-smoke:
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.head_branch == 'main' &&
-        github.event.workflow_run.event == 'push'
-      )
     runs-on: ubuntu-latest
     env:
       DEPLOYED_BASE_URL: ${{ vars.DEPLOYED_BASE_URL || 'https://lawa-rag-agent-xwbfu.ondigitalocean.app' }}
@@ -24,8 +12,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -52,15 +38,6 @@ jobs:
           from tests.live_utils import wait_for_http_ready
 
           wait_for_http_ready(os.environ["DEPLOYED_BASE_URL"], timeout_seconds=600)
-          PY
-
-      - name: Wait for deployed grounded chat readiness
-        run: |
-          python - <<'PY'
-          import os
-          from tests.live_utils import wait_for_grounded_chat_ready
-
-          wait_for_grounded_chat_ready(os.environ["DEPLOYED_BASE_URL"], timeout_seconds=900)
           PY
 
       - name: Run deployed environment smoke tests

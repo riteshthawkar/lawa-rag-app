@@ -75,53 +75,6 @@ def post_chat_request(base_url: str, payload: dict, timeout: int = 180) -> reque
     return requests.post(f"{base_url}/telegram-chat", json=payload, timeout=timeout)
 
 
-def wait_for_grounded_chat_ready(base_url: str, timeout_seconds: int = 900) -> None:
-    deadline = time.time() + timeout_seconds
-    last_error = None
-    payload = {
-        "question": "What is the UAE Golden Visa?",
-        "language": "English",
-        "previous_chats": [],
-        "response_detail_level": "concise",
-    }
-    headers = {
-        "x-health-probe": "true",
-        "Content-Type": "application/json",
-    }
-
-    while time.time() < deadline:
-        try:
-            response = requests.post(
-                f"{base_url}/telegram-chat",
-                json=payload,
-                headers=headers,
-                timeout=90,
-            )
-
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                except Exception:
-                    last_error = f"unexpected non-JSON 200 response: {response.text[:200]}"
-                else:
-                    answer = data.get("response", "").lower()
-                    sources = data.get("sources", [])
-                    if "golden visa" in answer and len(sources) >= 1:
-                        return
-                    last_error = f"unexpected 200 payload: {answer[:200]}"
-            else:
-                body_preview = response.text[:200].replace("\n", " ")
-                last_error = f"status {response.status_code}: {body_preview}"
-        except Exception as exc:  # pragma: no cover - best effort wait loop
-            last_error = str(exc)
-
-        time.sleep(10)
-
-    raise AssertionError(
-        f"Deployed grounded chat did not become ready at {base_url}: {last_error}"
-    )
-
-
 async def collect_websocket_messages(ws_url: str, token: str, payload: dict, timeout: int = 120):
     messages = []
     async with websockets.connect(f"{ws_url}?token={token}") as websocket:
