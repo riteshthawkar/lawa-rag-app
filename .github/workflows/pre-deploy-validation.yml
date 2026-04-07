@@ -191,6 +191,22 @@ jobs:
             exit 1
           fi
 
+      - name: Normalize backend URL
+        run: |
+          python3 - <<'PY'
+          import os
+
+          raw_backend_url = os.environ["BACKEND_URL"].rstrip("/")
+          normalized_backend_url = (
+              raw_backend_url[:-4]
+              if raw_backend_url.endswith("/api")
+              else raw_backend_url
+          )
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as github_env:
+              github_env.write(f"BACKEND_URL={normalized_backend_url}\n")
+          PY
+
       - name: Mint websocket test token
         run: |
           python3 - <<'PY'
