@@ -92,6 +92,52 @@ async def emit_status_update(
     if interaction_id and token:
         await update_interaction_status(interaction_id, status_value, token, error_message)
 
+
+def is_health_probe(request: Request) -> bool:
+    return request.headers.get("x-health-probe", "").lower() in {"1", "true", "yes"}
+
+
+def probe_failure_response(
+    message: str,
+    detail: Optional[str] = None,
+    status_code: int = 503,
+) -> JSONResponse:
+    content = {
+        "status": "error",
+        "message": message,
+    }
+    if detail:
+        content["detail"] = detail[:200]
+    return JSONResponse(status_code=status_code, content=content)
+
+
+async def run_generation_probe() -> JSONResponse:
+    try:
+        completion = await openai_client.chat.completions.create(
+            model=MAIN_MODEL,
+            messages=[
+                {"role": "system", "content": "Reply with exactly OK."},
+                {"role": "user", "content": "health check"},
+            ],
+            temperature=0,
+            max_completion_tokens=6,
+        )
+        reply = (completion.choices[0].message.content or "").strip()
+        if not reply:
+            return probe_failure_response("Generation probe returned an empty response")
+
+        return JSONResponse(
+            content={
+                "status": "healthy",
+                "message": "Generation path available",
+                "model": MAIN_MODEL,
+                "reply": reply,
+            }
+        )
+    except Exception as exc:
+        logger.exception("Generation probe failed:")
+        return probe_failure_response("Generation probe failed", str(exc))
+
 # ------------------------------------------------------------------------------
 # WebSocket endpoint for chat functionality with improved error handling
 # ------------------------------------------------------------------------------
@@ -440,6 +486,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None, chat_id: s
 async def telegram_chat(chat_request: ChatRequest, request: Request):
     # Extract the question and language from the validated request body.
     logger.info(f"Received telegram chat request: {chat_request}")
+    is_probe_request = is_health_probe(request)
     
     question = chat_request.question
     language = chat_request.language
@@ -451,6 +498,11 @@ async def telegram_chat(chat_request: ChatRequest, request: Request):
     
     # Handle direct responses (out of scope or clarification requests)
     if agent_result["action"] in ["respond", "clarify"]:
+        if is_probe_request:
+            return probe_failure_response(
+                "Synthetic probe was handled as a non-answer path",
+                agent_result.get("response"),
+            )
         return {
             "response": agent_result["response"],
             "sources": []
@@ -494,6 +546,8 @@ async def telegram_chat(chat_request: ChatRequest, request: Request):
         retrieved_docs = await asyncio.to_thread(request.app.state.retriever.invoke, query_for_retrieval)
     except Exception as e:
         logger.exception("Document retrieval error:")
+        if is_probe_request:
+            return probe_failure_response("Document retrieval failed during probe", str(e))
         return {
             "response": "This question is out of my scope. Please try again with another question.",
             "sources": []
@@ -506,6 +560,8 @@ async def telegram_chat(chat_request: ChatRequest, request: Request):
     } for ele in retrieved_docs]
 
     if not docs:
+        if is_probe_request:
+            return probe_failure_response("Synthetic probe retrieved no documents")
         return {
             "response": "No information found to answer your question.",
             "sources": []
@@ -546,6 +602,8 @@ async def telegram_chat(chat_request: ChatRequest, request: Request):
                 cleaned_content = re.sub(r'\[\d+\]', '', delta_content)
     except Exception as e:
         logger.exception("Error during streaming response:")
+        if is_probe_request:
+            return probe_failure_response("Response generation failed during probe", str(e))
         return {
             "response": "Response generation failed. Please try again later.",
             "sources": []
@@ -553,6 +611,8 @@ async def telegram_chat(chat_request: ChatRequest, request: Request):
 
     # If the initial response indicates no answer, inform the user
     if not isResponseAvailable:
+        if is_probe_request:
+            return probe_failure_response("Synthetic probe did not yield a confident answer")
         return {
             "response": "I apologize, but I don't have sufficient information in my knowledge base to provide a complete answer to your question. Please try rephrasing your question or providing more specific details about what you're looking for.",
             "sources": []
@@ -581,3 +641,8 @@ async def api_root():
 @app.get("/health")
 async def health():
     return JSONResponse(content={"message": "working"})
+
+
+@app.get("/health/generation")
+async def health_generation():
+    return await run_generation_probe()

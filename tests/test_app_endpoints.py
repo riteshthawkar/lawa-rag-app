@@ -1,4 +1,4 @@
-from tests.fakes import FakeOpenAIClient, FakeRetriever, FakeStream
+from tests.fakes import FakeOpenAIClient, FakeRetriever, FakeStream, make_completion
 
 
 def _chat_payload():
@@ -14,6 +14,36 @@ def test_health_endpoints_work(client):
     assert client.get("/").json() == {"status": "working"}
     assert client.get("/api").json() == {"message": "API is working"}
     assert client.get("/health").json() == {"message": "working"}
+
+
+def test_generation_health_probe_reports_success(client, app_module, monkeypatch):
+    monkeypatch.setattr(app_module, "openai_client", FakeOpenAIClient([make_completion("OK")]))
+
+    response = client.get("/health/generation")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "healthy",
+        "message": "Generation path available",
+        "model": app_module.MAIN_MODEL,
+        "reply": "OK",
+    }
+
+
+def test_generation_health_probe_reports_failure(client, app_module, monkeypatch):
+    monkeypatch.setattr(
+        app_module,
+        "openai_client",
+        FakeOpenAIClient([RuntimeError("OpenAI unavailable")]),
+    )
+
+    response = client.get("/health/generation")
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["message"] == "Generation probe failed"
+    assert "OpenAI unavailable" in data["detail"]
 
 
 def test_telegram_chat_returns_grounded_response(client, app_module, monkeypatch, sample_docs):
@@ -71,6 +101,26 @@ def test_telegram_chat_handles_direct_responses(client, app_module, monkeypatch)
         "response": "I can only answer UAE government questions.",
         "sources": [],
     }
+
+
+def test_probe_requests_fail_on_direct_response(client, app_module, monkeypatch):
+    async def fake_query_rewriting_agent(*args, **kwargs):
+        return {
+            "action": "respond",
+            "response": "I can only answer UAE government questions.",
+            "query_type": "Other",
+        }
+
+    monkeypatch.setattr(app_module, "query_rewriting_agent", fake_query_rewriting_agent)
+
+    response = client.post(
+        "/telegram-chat",
+        json=_chat_payload(),
+        headers={"x-health-probe": "true"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["message"] == "Synthetic probe was handled as a non-answer path"
 
 
 def test_telegram_chat_handles_retrieval_failure(client, app_module, monkeypatch):
