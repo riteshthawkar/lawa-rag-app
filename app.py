@@ -443,6 +443,7 @@ async def telegram_chat(chat_request: ChatRequest, request: Request):
     
     question = chat_request.question
     language = chat_request.language
+    response_detail_level = chat_request.response_detail_level
     previous_chats = chat_request.previous_chats
 
     # Apply query rewriting agent to analyze and possibly rewrite the query
@@ -518,7 +519,7 @@ async def telegram_chat(chat_request: ChatRequest, request: Request):
         ranked_docs = docs
 
     # Prepare the conversation messages.
-    messages = [{"role": "system", "content": system_prompt}]
+    messages = [{"role": "system", "content": get_system_prompt(response_detail_level)}]
     messages.extend(relevant_history)  # Use only the relevant history
     messages.append({"role": "user", "content": format_query(question, language, ranked_docs)})
 
@@ -531,7 +532,7 @@ async def telegram_chat(chat_request: ChatRequest, request: Request):
             model=MAIN_MODEL,
             messages=messages,
             temperature=MAIN_MODEL_TEMPERATURE,
-            max_completion_tokens=MAX_COMPLETION_TOKENS,
+            max_completion_tokens=get_max_tokens_for_detail_level(response_detail_level),
             stream=True
         )
         async for chunk in completion:
