@@ -87,6 +87,8 @@ jobs:
       MAIN_MODEL: gpt-5.4
       QUERY_REWRITING_MODEL: gpt-5.4-mini
       FALLBACK_MODEL: gpt-5.4-mini
+      EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL || 'google/embeddinggemma-300m' }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HOST: 127.0.0.1
       PORT: "18080"
       LIVE_APP_BASE_URL: http://127.0.0.1:18080

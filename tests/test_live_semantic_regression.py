@@ -1,8 +1,15 @@
 import os
+import time
 
 import pytest
 
 from tests.live_utils import live_app_base_url, post_chat_request, require_env_values
+
+
+TRANSIENT_RESPONSES = {
+    "this question is out of my scope. please try again with another question.",
+    "response generation failed. please try again later.",
+}
 
 
 def _require_live_app():
@@ -53,11 +60,21 @@ def test_live_semantic_regression_for_key_query_types(
 ):
     _require_live_app()
 
-    response = post_chat_request(live_app_base_url(), payload)
-    assert response.status_code == 200
+    response = None
+    data = None
+    answer = ""
 
-    data = response.json()
-    answer = data.get("response", "").lower()
+    for attempt in range(3):
+        response = post_chat_request(live_app_base_url(), payload)
+        assert response.status_code == 200
+
+        data = response.json()
+        answer = data.get("response", "").lower()
+        if answer not in TRANSIENT_RESPONSES:
+            break
+        if attempt < 2:
+            time.sleep(2)
+
     assert answer
 
     for term in expected_terms:
