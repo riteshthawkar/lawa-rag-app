@@ -63,6 +63,16 @@ lawa-rag-agent/
 - **Citation Processing**: Extracts and formats citations from responses
 - **Fallback Search**: Uses Tavily search when Pinecone retrieval yields no results 
 
+## Testing And CI
+
+This repository uses a layered CI strategy for chatbot reliability:
+
+- fast mocked tests on every push and pull request
+- live provider and local live-app validation on `main`
+- manual post-deploy smoke checks for the deployed environment
+
+For a reusable guide you can apply to similar chatbot projects, see [`docs/chatbot-ci-pipeline.md`](docs/chatbot-ci-pipeline.md).
+
 # Load Testing with Locust
 
 This repository contains a load testing script using Locust to test the WebSocket chat endpoint.
