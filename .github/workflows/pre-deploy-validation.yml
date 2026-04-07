@@ -156,7 +156,7 @@ jobs:
       PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
       PINECONE_INDEX_NAME: ${{ vars.PINECONE_INDEX_NAME || secrets.PINECONE_INDEX_NAME }}
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      BACKEND_URL: ${{ vars.BACKEND_URL || secrets.BACKEND_URL || 'https://jellyfish-app-v7scu.ondigitalocean.app' }}
+      BACKEND_URL: ${{ vars.WEBSOCKET_BACKEND_URL || secrets.WEBSOCKET_BACKEND_URL || 'https://jellyfish-app-v7scu.ondigitalocean.app' }}
       DEMO_USER_EMAIL: ${{ secrets.DEMO_USER_EMAIL }}
       DEMO_USER_PASSWORD: ${{ secrets.DEMO_USER_PASSWORD }}
       MAIN_MODEL: gpt-5.4
@@ -181,13 +181,18 @@ jobs:
       - name: Validate required websocket secrets
         run: |
           missing=0
-          for var in OPENAI_API_KEY PINECONE_API_KEY PINECONE_INDEX_NAME SECRET_KEY BACKEND_URL DEMO_USER_EMAIL DEMO_USER_PASSWORD; do
+          for var in OPENAI_API_KEY PINECONE_API_KEY PINECONE_INDEX_NAME SECRET_KEY DEMO_USER_EMAIL DEMO_USER_PASSWORD; do
             if [ -z "${!var}" ]; then
               echo "::error::$var is required for live websocket end-to-end validation"
               missing=1
             fi
           done
           if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          if [ -z "$BACKEND_URL" ]; then
+            echo "::error::BACKEND_URL could not be resolved for live websocket end-to-end validation"
             exit 1
           fi
 
