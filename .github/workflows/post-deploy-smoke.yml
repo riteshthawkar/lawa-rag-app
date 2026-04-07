@@ -19,7 +19,7 @@ jobs:
       )
     runs-on: ubuntu-latest
     env:
-      DEPLOYED_BASE_URL: ${{ vars.DEPLOYED_BASE_URL }}
+      DEPLOYED_BASE_URL: ${{ vars.DEPLOYED_BASE_URL || 'https://lawa-rag-agent-xwbfu.ondigitalocean.app' }}
 
     steps:
       - name: Checkout repository
@@ -36,7 +36,7 @@ jobs:
       - name: Validate deployed base URL
         run: |
           if [ -z "$DEPLOYED_BASE_URL" ]; then
-            echo "::error::DEPLOYED_BASE_URL repository variable is required"
+            echo "::error::DEPLOYED_BASE_URL must be configured for deployed smoke tests"
             exit 1
           fi
 

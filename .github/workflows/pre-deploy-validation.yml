@@ -156,8 +156,9 @@ jobs:
       PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
       PINECONE_INDEX_NAME: ${{ vars.PINECONE_INDEX_NAME || secrets.PINECONE_INDEX_NAME }}
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      BACKEND_URL: ${{ vars.BACKEND_URL || secrets.BACKEND_URL }}
-      WEBSOCKET_TEST_TOKEN: ${{ secrets.WEBSOCKET_TEST_TOKEN }}
+      BACKEND_URL: ${{ vars.BACKEND_URL || secrets.BACKEND_URL || 'https://jellyfish-app-v7scu.ondigitalocean.app' }}
+      DEMO_USER_EMAIL: ${{ secrets.DEMO_USER_EMAIL }}
+      DEMO_USER_PASSWORD: ${{ secrets.DEMO_USER_PASSWORD }}
       MAIN_MODEL: gpt-5.4
       QUERY_REWRITING_MODEL: gpt-5.4-mini
       FALLBACK_MODEL: gpt-5.4-mini
@@ -180,7 +181,7 @@ jobs:
       - name: Validate required websocket secrets
         run: |
           missing=0
-          for var in OPENAI_API_KEY PINECONE_API_KEY PINECONE_INDEX_NAME SECRET_KEY BACKEND_URL WEBSOCKET_TEST_TOKEN; do
+          for var in OPENAI_API_KEY PINECONE_API_KEY PINECONE_INDEX_NAME SECRET_KEY BACKEND_URL DEMO_USER_EMAIL DEMO_USER_PASSWORD; do
             if [ -z "${!var}" ]; then
               echo "::error::$var is required for live websocket end-to-end validation"
               missing=1
@@ -189,6 +190,48 @@ jobs:
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
+
+      - name: Mint websocket test token
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          backend_url = os.environ["BACKEND_URL"].rstrip("/")
+          payload = json.dumps(
+              {
+                  "username": os.environ["DEMO_USER_EMAIL"],
+                  "password": os.environ["DEMO_USER_PASSWORD"],
+              }
+          ).encode()
+          request = urllib.request.Request(
+              f"{backend_url}/api/token/",
+              data=payload,
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  body = json.loads(response.read().decode())
+          except Exception as exc:
+              print(
+                  f"::error::Failed to mint websocket test token from {backend_url}/api/token/: {exc}"
+              )
+              raise
+
+          access_token = body.get("access")
+          if not access_token:
+              print(
+                  f"::error::Token endpoint did not return an access token: {json.dumps(body)}"
+              )
+              sys.exit(1)
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as github_env:
+              github_env.write(f"WEBSOCKET_TEST_TOKEN={access_token}\n")
+          PY
 
       - name: Install dependencies
         run: |
