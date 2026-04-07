@@ -54,5 +54,14 @@ jobs:
           wait_for_http_ready(os.environ["DEPLOYED_BASE_URL"], timeout_seconds=600)
           PY
 
+      - name: Wait for deployed grounded chat readiness
+        run: |
+          python - <<'PY'
+          import os
+          from tests.live_utils import wait_for_grounded_chat_ready
+
+          wait_for_grounded_chat_ready(os.environ["DEPLOYED_BASE_URL"], timeout_seconds=900)
+          PY
+
       - name: Run deployed environment smoke tests
         run: pytest -m deployed tests/test_deployed_smoke.py --maxfail=1 --disable-warnings
