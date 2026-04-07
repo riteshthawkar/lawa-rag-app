@@ -135,6 +135,40 @@ def test_telegram_chat_handles_generation_failure(client, app_module, monkeypatc
     }
 
 
+def test_telegram_chat_falls_back_when_rerank_times_out(
+    client, app_module, monkeypatch, sample_docs
+):
+    async def fake_query_rewriting_agent(*args, **kwargs):
+        return {
+            "action": "rewrite",
+            "rewritten_query": "UAE Golden Visa overview",
+            "query_type": "General Information",
+            "relevant_history_indices": [],
+        }
+
+    monkeypatch.setattr(app_module, "query_rewriting_agent", fake_query_rewriting_agent)
+    monkeypatch.setattr(client.app.state, "retriever", FakeRetriever(sample_docs))
+
+    def exploding_rerank(*args, **kwargs):
+        raise TimeoutError("Pinecone rerank timeout")
+
+    fake_client = FakeOpenAIClient(
+        [FakeStream(["The UAE Golden Visa is a long-term residence visa [1]."])]
+    )
+
+    monkeypatch.setattr(app_module, "rerank_docs", exploding_rerank)
+    monkeypatch.setattr(app_module, "openai_client", fake_client)
+
+    response = client.post("/telegram-chat", json=_chat_payload())
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "Golden Visa" in data["response"]
+    assert data["sources"] == [
+        {"url": "https://example.com/golden-visa", "cite_num": "1"}
+    ]
+
+
 def test_telegram_chat_rejects_invalid_payload(client):
     response = client.post("/telegram-chat", json={})
     assert response.status_code == 422

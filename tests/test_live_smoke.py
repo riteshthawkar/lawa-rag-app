@@ -4,42 +4,14 @@ import pytest
 from openai import OpenAI
 from pinecone import Pinecone
 
+from tests.live_utils import require_clean_env_value, require_env_values
+
 
 def _require_live_configuration():
     if os.getenv("RUN_LIVE_PROVIDER_TESTS") != "1":
         pytest.skip("Live provider smoke tests are disabled")
 
-    missing = [
-        name
-        for name in ("OPENAI_API_KEY", "PINECONE_API_KEY", "PINECONE_INDEX_NAME")
-        if not os.getenv(name)
-    ]
-    if missing:
-        pytest.skip(f"Missing live test configuration: {', '.join(missing)}")
-
-
-def _require_clean_env_value(name: str) -> str:
-    value = os.environ[name]
-
-    if value in {"***", "your-openai-api-key", "your-pinecone-api-key"}:
-        pytest.fail(
-            f"{name} appears to still be a placeholder value. "
-            "Update the GitHub Actions secret or variable with the real credential."
-        )
-
-    if value != value.strip():
-        pytest.fail(
-            f"{name} contains leading or trailing whitespace. "
-            "Re-save it in GitHub without quotes or extra line breaks."
-        )
-
-    if any(ch in value for ch in ("\r", "\n", "\t", "\x00")):
-        pytest.fail(
-            f"{name} contains control characters. "
-            "Re-save it in GitHub as a single plain-text line."
-        )
-
-    return value
+    require_env_values("OPENAI_API_KEY", "PINECONE_API_KEY", "PINECONE_INDEX_NAME")
 
 
 @pytest.mark.live
