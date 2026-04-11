@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 import nltk
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import ValidationError
 
 # Import modules
@@ -45,6 +45,7 @@ from modules.backend_client import (
     create_interaction,
     emit_processing_step,
 )
+from modules.demo_dashboard import build_growth_dashboard_page
 
 
 # ------------------------------------------------------------------------------
@@ -1084,6 +1085,11 @@ async def root():
 @app.get("/api", response_class=JSONResponse)
 async def api_root():
     return JSONResponse(content={"message": "API is working"})
+
+
+@app.get("/demo/growth-dashboard", response_class=HTMLResponse)
+async def growth_dashboard():
+    return HTMLResponse(content=build_growth_dashboard_page())
 
 @app.get("/health")
 async def health(request: Request):

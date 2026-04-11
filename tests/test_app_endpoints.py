@@ -43,6 +43,20 @@ def test_health_endpoints_work(client, app_module, monkeypatch):
     assert detailed_data["checks"]["reranker"]["status"] == "healthy"
 
 
+def test_growth_dashboard_page_renders(client):
+    response = client.get("/demo/growth-dashboard")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    body = response.text
+    assert "Users and Queries Over Time" in body
+    assert "Download PNG" in body
+    assert "Daily Users" in body
+    assert "Daily Queries" in body
+    assert "30,000" in body
+    assert "2,200" in body
+
+
 def test_generation_health_probe_reports_success(client, app_module, monkeypatch):
     async def fake_query_rewriting_agent(*args, **kwargs):
         return {
