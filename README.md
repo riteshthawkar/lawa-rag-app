@@ -54,9 +54,12 @@ lawa-rag-agent/
 
 - WebSocket: `/chat` - For real-time chat interactions
 - HTTP POST: `/telegram-chat` - For Telegram bot integration
-- HTTP GET: `/health` - Fast liveness and high-level readiness
-- HTTP GET: `/health/detailed` - Dependency and release metadata breakdown
-- HTTP GET: `/health/generation` - Synthetic end-to-end RAG generation probe
+- HTTP GET: `/health/live` - Process liveness (contract endpoint)
+- HTTP GET: `/health/ready` - Traffic readiness (contract endpoint)
+- HTTP GET: `/health/detailed` - Full dependency report (contract endpoint)
+- HTTP GET: `/health/journey` - End-to-end RAG journey probe (contract endpoint)
+- HTTP GET: `/health` - Backward-compatible alias to readiness report
+- HTTP GET: `/health/generation` - Backward-compatible generation probe
 
 ## Features
 

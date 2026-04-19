@@ -117,6 +117,8 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8080"))
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 SERVICE_NAME = os.getenv("SERVICE_NAME", "lawa-rag")
+SERVICE_DISPLAY_NAME = os.getenv("SERVICE_DISPLAY_NAME", "LAWA RAG")
+SERVICE_TYPE = os.getenv("SERVICE_TYPE", "rag")
 SERVICE_ENVIRONMENT = os.getenv(
     "SERVICE_ENVIRONMENT",
     os.getenv("ENVIRONMENT", "development"),

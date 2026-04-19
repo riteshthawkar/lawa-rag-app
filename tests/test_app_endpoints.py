@@ -18,29 +18,78 @@ def _chat_payload():
 def test_health_endpoints_work(client, app_module, monkeypatch):
     monkeypatch.setattr(app_module, "openai_client", FakeOpenAIClient([]))
 
+    live_response = client.get("/health/live")
+    ready_response = client.get("/health/ready")
     health_response = client.get("/health")
     detailed_response = client.get("/health/detailed")
 
     assert client.get("/").json() == {"status": "working"}
     assert client.get("/api").json() == {"message": "API is working"}
+    assert live_response.status_code == 200
+    assert ready_response.status_code == 200
     assert health_response.status_code == 200
     assert detailed_response.status_code == 200
 
+    live_data = live_response.json()
+    assert live_data["version"] == "monitoring-contract/v1"
+    assert live_data["status"] == "healthy"
+    assert live_data["service"]["id"] == "lawa-rag"
+    assert live_data["service"]["type"] == "rag"
+    assert "timestamp" in live_data
+    assert live_data["checks"]["application"]["status"] == "healthy"
+    assert live_data["checks"]["process"]["status"] == "healthy"
+
+    ready_data = ready_response.json()
+    assert ready_data["version"] == "monitoring-contract/v1"
+    assert ready_data["status"] == "healthy"
+    assert ready_data["service"]["id"] == "lawa-rag"
+    assert "checks" in ready_data
+    assert ready_data["checks"]["retriever"]["status"] == "healthy"
+    assert ready_data["checks"]["vector_store_client"]["status"] == "healthy"
+
     health_data = health_response.json()
     assert health_data["status"] == "healthy"
-    assert health_data["service"] == "lawa-rag"
+    assert health_data["version"] == "monitoring-contract/v1"
+    assert health_data["service"]["id"] == "lawa-rag"
     assert "timestamp" in health_data
     assert "checks" in health_data
     assert health_data["checks"]["retriever"]["status"] == "healthy"
     assert health_data["checks"]["vector_store_client"]["status"] == "healthy"
 
     detailed_data = detailed_response.json()
+    assert detailed_data["version"] == "monitoring-contract/v1"
     assert detailed_data["status"] == "healthy"
+    assert detailed_data["service"]["id"] == "lawa-rag"
     assert detailed_data["checks"]["embedding_model"]["status"] == "healthy"
     assert detailed_data["checks"]["vector_store"]["status"] == "healthy"
     assert detailed_data["checks"]["generation_model"]["status"] == "healthy"
     assert detailed_data["checks"]["query_rewriting_model"]["status"] == "healthy"
     assert detailed_data["checks"]["reranker"]["status"] == "healthy"
+
+
+def test_journey_endpoint_returns_contract_shape(client, app_module, monkeypatch):
+    async def fake_probe(_request):
+        return app_module.JSONResponse(
+            status_code=200,
+            content={
+                "status": "healthy",
+                "checks": {
+                    "generation": {"status": "healthy", "reply": "OK"},
+                },
+            },
+        )
+
+    monkeypatch.setattr(app_module, "run_generation_probe", fake_probe)
+    response = client.get("/health/journey")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["version"] == "monitoring-contract/v1"
+    assert data["service"]["id"] == "lawa-rag"
+    assert data["status"] == "healthy"
+    assert data["journey"]["name"] == "rag_generation"
+    assert data["journey"]["status"] == "healthy"
+    assert data["journey"]["probeModeSupported"] is True
 
 
 def test_growth_dashboard_page_renders(client):
