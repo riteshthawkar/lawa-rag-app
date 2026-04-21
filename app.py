@@ -1,7 +1,9 @@
 import asyncio
+import json
 import os
 import re
 import sys
+import time
 from typing import Optional
 from contextlib import asynccontextmanager
 
@@ -22,9 +24,13 @@ from modules.config import (
     get_max_tokens_for_detail_level
 )
 from modules.monitoring import (
+    CONTRACT_VERSION,
     DEGRADED,
     HEALTHY,
+    UNKNOWN,
     UNHEALTHY,
+    aggregate_status,
+    build_contract_payload,
     build_health_payload,
     component,
     health_status_code,
@@ -119,6 +125,17 @@ def build_release_metadata() -> dict:
     }
 
 
+def build_release_metadata_contract() -> dict:
+    payload = {
+        "version": settings.RELEASE_VERSION if settings.RELEASE_VERSION else "unknown",
+    }
+    if settings.COMMIT_SHA and settings.COMMIT_SHA != "unknown":
+        payload["commitSha"] = settings.COMMIT_SHA
+    if settings.DEPLOYED_AT and settings.DEPLOYED_AT != "unknown":
+        payload["deployedAt"] = settings.DEPLOYED_AT
+    return payload
+
+
 def build_operations_metadata() -> dict:
     return {
         "owner": settings.SERVICE_OWNER,
@@ -127,6 +144,16 @@ def build_operations_metadata() -> dict:
         "repository_url": settings.PRIMARY_REPOSITORY_URL,
         "public_base_url": settings.PUBLIC_BASE_URL,
     }
+
+
+def build_contract_summary(status: str, endpoint: str) -> str:
+    if status == HEALTHY:
+        return f"{endpoint} checks passed"
+    if status == DEGRADED:
+        return f"{endpoint} checks degraded"
+    if status == UNHEALTHY:
+        return f"{endpoint} checks failed"
+    return f"{endpoint} status unknown"
 
 
 def metadata_check(values: dict, *, required_keys: list[str]) -> dict:
@@ -316,6 +343,47 @@ def probe_failure_response(
     if detail:
         content["detail"] = detail[:200]
     return JSONResponse(status_code=status_code, content=content)
+
+
+def contract_response(
+    *,
+    endpoint_label: str,
+    checks: dict[str, dict],
+    status: Optional[str] = None,
+    journey: Optional[dict] = None,
+) -> JSONResponse:
+    resolved_status = status or aggregate_status(checks)
+    payload = build_contract_payload(
+        service_id=settings.SERVICE_NAME,
+        service_name=settings.SERVICE_DISPLAY_NAME,
+        service_type=settings.SERVICE_TYPE,
+        environment=settings.SERVICE_ENVIRONMENT,
+        checks=checks,
+        journey=journey,
+        release=build_release_metadata_contract(),
+        operations=build_operations_metadata(),
+        summary=build_contract_summary(resolved_status, endpoint_label),
+        status=resolved_status,
+    )
+    return JSONResponse(
+        status_code=health_status_code(resolved_status),
+        content=payload,
+    )
+
+
+def parse_probe_payload(response: JSONResponse) -> dict:
+    try:
+        return json.loads(response.body.decode("utf-8"))
+    except Exception:
+        return {
+            "status": UNKNOWN,
+            "checks": {
+                "journey": component(
+                    UNHEALTHY,
+                    detail="Unable to parse probe payload",
+                )
+            },
+        }
 
 
 async def run_generation_probe(request: Request) -> JSONResponse:
@@ -1093,36 +1161,73 @@ async def growth_dashboard():
 
 @app.get("/health")
 async def health(request: Request):
-    checks = basic_health_checks(request)
-    payload = build_health_payload(
-        service=settings.SERVICE_NAME,
-        environment=settings.SERVICE_ENVIRONMENT,
+    return await health_ready(request)
+
+
+@app.get("/health/live")
+async def health_live(request: Request):
+    checks = {
+        "application": component(HEALTHY),
+        "process": component(HEALTHY, pid=os.getpid()),
+        "contract": component(HEALTHY, version=CONTRACT_VERSION),
+    }
+    return contract_response(
+        endpoint_label="live",
         checks=checks,
-        release=build_release_metadata(),
-        operations=build_operations_metadata(),
+        status=HEALTHY,
     )
-    return JSONResponse(
-        status_code=health_status_code(payload["status"]),
-        content=payload,
+
+
+@app.get("/health/ready")
+async def health_ready(request: Request):
+    checks = basic_health_checks(request)
+    return contract_response(
+        endpoint_label="ready",
+        checks=checks,
     )
 
 
 @app.get("/health/detailed")
 async def health_detailed(request: Request):
     checks = await detailed_health_checks(request)
-    payload = build_health_payload(
-        service=settings.SERVICE_NAME,
-        environment=settings.SERVICE_ENVIRONMENT,
+    return contract_response(
+        endpoint_label="detailed",
         checks=checks,
-        release=build_release_metadata(),
-        operations=build_operations_metadata(),
-    )
-    return JSONResponse(
-        status_code=health_status_code(payload["status"]),
-        content=payload,
     )
 
 
 @app.get("/health/generation")
 async def health_generation(request: Request):
     return await run_generation_probe(request)
+
+
+@app.get("/health/journey")
+async def health_journey(request: Request):
+    started_at = time.perf_counter()
+    probe_response = await run_generation_probe(request)
+    probe_payload = parse_probe_payload(probe_response)
+    probe_checks = probe_payload.get("checks", {})
+    probe_status = probe_payload.get("status", UNHEALTHY)
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+    generation_detail = (
+        probe_checks.get("generation", {}).get("detail")
+        if isinstance(probe_checks, dict)
+        else None
+    )
+
+    journey = {
+        "name": "rag_generation",
+        "status": probe_status,
+        "probeModeSupported": True,
+        "sideEffects": "none",
+        "durationMs": duration_ms,
+    }
+    if generation_detail:
+        journey["message"] = str(generation_detail)[:200]
+
+    return contract_response(
+        endpoint_label="journey",
+        checks=probe_checks if isinstance(probe_checks, dict) else {},
+        status=probe_status if isinstance(probe_status, str) else UNHEALTHY,
+        journey=journey,
+    )

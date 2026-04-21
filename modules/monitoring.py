@@ -5,6 +5,8 @@ from typing import Any
 HEALTHY = "healthy"
 DEGRADED = "degraded"
 UNHEALTHY = "unhealthy"
+UNKNOWN = "unknown"
+CONTRACT_VERSION = "monitoring-contract/v1"
 
 
 def utc_timestamp() -> str:
@@ -47,6 +49,44 @@ def build_health_payload(
         "timestamp": utc_timestamp(),
         "checks": checks,
     }
+    if release is not None:
+        payload["release"] = release
+    if operations is not None:
+        payload["operations"] = operations
+    return payload
+
+
+def build_contract_payload(
+    *,
+    service_id: str,
+    service_name: str,
+    service_type: str,
+    environment: str,
+    checks: dict[str, dict[str, Any]] | None = None,
+    journey: dict[str, Any] | None = None,
+    release: dict[str, Any] | None = None,
+    operations: dict[str, Any] | None = None,
+    summary: str | None = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    payload_status = status or aggregate_status(checks or {})
+    payload: dict[str, Any] = {
+        "version": CONTRACT_VERSION,
+        "service": {
+            "id": service_id,
+            "name": service_name,
+            "type": service_type,
+            "environment": environment,
+        },
+        "status": payload_status,
+        "timestamp": utc_timestamp(),
+    }
+    if summary:
+        payload["summary"] = summary
+    if checks is not None:
+        payload["checks"] = checks
+    if journey is not None:
+        payload["journey"] = journey
     if release is not None:
         payload["release"] = release
     if operations is not None:
